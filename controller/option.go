@@ -201,6 +201,20 @@ func UpdateOption(c *gin.Context) {
 		option.Value = fmt.Sprintf("%v", option.Value)
 	}
 	switch option.Key {
+	case model.AffiliateCashbackOption:
+		if c.GetInt("role") != common.RoleRootUser {
+			common.ApiErrorMsg(c, "only root can configure recharge cashback")
+			return
+		}
+		rules, err := model.ParseAffiliateCashbackRules(option.Value.(string))
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if (rules.FirstEnabled || rules.RegularEnabled) && !operation_setting.IsPaymentComplianceConfirmed() {
+			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+			return
+		}
 	case "QuotaForInviter", "QuotaForInvitee":
 		if isPositiveOptionValue(option.Value.(string)) && !operation_setting.IsPaymentComplianceConfirmed() {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)

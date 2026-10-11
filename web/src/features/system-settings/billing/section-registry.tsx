@@ -25,6 +25,7 @@ import { PaymentSettingsSection } from '../integrations/payment-settings-section
 import { RatioSettingsCard } from '../models/ratio-settings-card'
 import type { BillingSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { CashbackSettingsSection } from './cashback-settings-section'
 
 const getModelDefaults = (settings: BillingSettings) => ({
   ModelPrice: settings.ModelPrice,
@@ -54,6 +55,13 @@ const getGroupDefaults = (settings: BillingSettings) => ({
 })
 
 const BILLING_SECTIONS = [
+  {
+    id: 'cashback',
+    titleKey: 'Recharge Cashback',
+    build: (settings: BillingSettings) => (
+      <CashbackSettingsSection value={settings.AffiliateCashback || ''} />
+    ),
+  },
   {
     id: 'quota',
     titleKey: 'Quota Settings',

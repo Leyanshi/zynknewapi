@@ -87,6 +87,10 @@ func ValidateTopUpQuotaCapacity(userId int, creditedQuota int) error {
 // Keeping the predicate and increment in one UPDATE prevents two
 // concurrent callbacks from both passing a separate read/check.
 func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[string]any) error {
+	return creditRechargeQuota(tx, userId, creditedQuota, updates, "online")
+}
+
+func creditRechargeQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[string]any, source string) error {
 	maxCurrentQuota, err := topUpQuotaMaxCurrent(creditedQuota)
 	if err != nil {
 		return err
@@ -95,6 +99,10 @@ func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[st
 	updateFields := make(map[string]any, len(updates)+1)
 	maps.Copy(updateFields, updates)
 	updateFields["quota"] = gorm.Expr("quota + ?", creditedQuota)
+	var before User
+	if err := lockForUpdate(tx).First(&before, userId).Error; err != nil {
+		return err
+	}
 
 	result := tx.Model(&User{}).
 		Where("id = ? AND quota <= ?", userId, maxCurrentQuota).
@@ -103,7 +111,7 @@ func creditTopUpQuota(tx *gorm.DB, userId int, creditedQuota int, updates map[st
 		return result.Error
 	}
 	if result.RowsAffected == 1 {
-		return nil
+		return awardRechargeCashback(tx, before, creditedQuota, source)
 	}
 
 	var count int64

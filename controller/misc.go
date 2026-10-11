@@ -45,6 +45,7 @@ func GetStatus(c *gin.Context) {
 
 	cs := console_setting.GetConsoleSetting()
 	passkeySetting := system_setting.PasskeySettingsSnapshot()
+	cashbackRules := model.GetAffiliateCashbackRules()
 	common.OptionMapRWMutex.RLock()
 	defer common.OptionMapRWMutex.RUnlock()
 
@@ -105,6 +106,7 @@ func GetStatus(c *gin.Context) {
 		"api_info_enabled":      cs.ApiInfoEnabled,
 		"uptime_kuma_enabled":   cs.UptimeKumaEnabled,
 		"announcements_enabled": cs.AnnouncementsEnabled,
+		"affiliate_cashback":    cashbackRules,
 		"faq_enabled":           cs.FAQEnabled,
 
 		// 模块管理配置

@@ -73,6 +73,7 @@ type Announcement = {
   publishDate: string
   type: 'default' | 'ongoing' | 'success' | 'warning' | 'error'
   extra?: string
+  popup?: boolean
 }
 
 type AnnouncementsSectionProps = {
@@ -91,6 +92,7 @@ const announcementSchema = z.object({
     .string()
     .max(100, 'Extra must be less than 100 characters')
     .optional(),
+  popup: z.boolean(),
 })
 
 type AnnouncementFormValues = z.infer<typeof announcementSchema>
@@ -153,6 +155,7 @@ export function AnnouncementsSection({
       publishDate: new Date().toISOString(),
       type: 'default',
       extra: '',
+      popup: false,
     },
   })
 
@@ -196,6 +199,7 @@ export function AnnouncementsSection({
       publishDate: new Date().toISOString(),
       type: 'default',
       extra: '',
+      popup: false,
     })
     setShowDialog(true)
   }
@@ -207,6 +211,7 @@ export function AnnouncementsSection({
       publishDate: announcement.publishDate,
       type: announcement.type,
       extra: announcement.extra || '',
+      popup: announcement.popup === true,
     })
     setShowDialog(true)
   }
@@ -560,6 +565,26 @@ export function AnnouncementsSection({
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='popup'
+              render={({ field }) => (
+                <FormItem className='flex items-start gap-3 rounded-md border p-3'>
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className='space-y-1'>
+                    <FormLabel>{t('Show as popup')}</FormLabel>
+                    <FormDescription>
+                      {t('Show this announcement in a popup to each user once')}
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />

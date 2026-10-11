@@ -67,6 +67,11 @@ func AdjustUserQuota(userID, operatorRole int, mode string, value int) (*UserQuo
 			if result.RowsAffected != 1 {
 				return gorm.ErrRecordNotFound
 			}
+			if after > user.Quota {
+				if err := awardRechargeCashback(tx, user, after-user.Quota, "admin"); err != nil {
+					return err
+				}
+			}
 		}
 		adjustment = UserQuotaAdjustment{UserID: user.Id, Username: user.Username, Before: user.Quota, After: after}
 		return nil

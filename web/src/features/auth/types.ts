@@ -88,6 +88,7 @@ export interface ApiResponse<T = unknown> {
 // ============================================================================
 
 export interface SystemStatus {
+  affiliate_cashback?: { transfer_enabled: boolean }
   success?: boolean
   message?: string
   data?: {

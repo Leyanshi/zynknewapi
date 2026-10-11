@@ -16,7 +16,13 @@ version: '3.4' # For compatibility with older Docker versions
 
 services:
   new-api:
-    image: calciumion/new-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: new-api:local
+    pull_policy: never
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
@@ -26,7 +32,7 @@ services:
       - ./data:/data
       - ./logs:/app/logs
     environment:
-      - SQL_DSN=postgresql://root:123456@postgres:5432/new-api # ⚠️ IMPORTANT: Change the password in production!
+      - SQL_DSN=postgres:// # ⚠️ IMPORTANT: Change the password in production!
 #      - SQL_DSN=root:123456@tcp(mysql:3306)/new-api  # Point to the mysql service, uncomment if using MySQL
 #      - LOG_SQL_DSN=postgresql://root:123456@postgres:5432/new-api-log # OPTIONAL: If you want a separate database for logging, uncomment and set this
 #      - LOG_SQL_DSN=clickhouse://default:123456@clickhouse:9000/new_api_logs # OPTIONAL: Use ClickHouse for logs only; also uncomment clickhouse in depends_on and the clickhouse service below
@@ -67,6 +73,9 @@ services:
 
   redis:
     image: redis:latest
+    pull_policy: never
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
     container_name: redis
     restart: always
     command: ["redis-server", "--requirepass", "123456"]  # ⚠️ IMPORTANT: Change this password in production!
@@ -75,6 +84,9 @@ services:
 
   postgres:
     image: postgres:15
+    pull_policy: never
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
     container_name: postgres
     restart: always
     environment:

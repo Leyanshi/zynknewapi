@@ -271,6 +271,7 @@ export type ModelSettings = {
 }
 
 export type BillingSettings = {
+  AffiliateCashback?: string
   QuotaForNewUser: number
   QuotaForInviter: number
   QuotaForInvitee: number

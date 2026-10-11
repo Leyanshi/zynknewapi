@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 import { Bell, Megaphone } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { RichContent } from '@/components/rich-content'
@@ -37,6 +38,14 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -61,6 +70,8 @@ interface NotificationPopoverProps {
   notice: string
   announcements: AnnouncementItem[]
   loading: boolean
+  popupAnnouncement?: AnnouncementItem | null
+  onPopupRead?: (announcement: Record<string, unknown>) => void
   className?: string
 }
 
@@ -299,11 +310,49 @@ export function NotificationPopover({
   notice,
   announcements,
   loading,
+  popupAnnouncement,
+  onPopupRead,
   className,
 }: NotificationPopoverProps) {
   const { t } = useTranslation()
+  const [popupOpen, setPopupOpen] = useState(false)
+
+  useEffect(() => {
+    if (popupAnnouncement) setPopupOpen(true)
+  }, [popupAnnouncement])
+
+  const closePopup = () => {
+    setPopupOpen(false)
+    if (popupAnnouncement) onPopupRead?.(popupAnnouncement as Record<string, unknown>)
+  }
+
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog
+        open={popupOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) closePopup()
+        }}
+      >
+        <DialogContent className='max-w-lg'>
+          <DialogHeader>
+            <DialogTitle>{t('System Announcement')}</DialogTitle>
+            <DialogDescription>{t('New announcement')}</DialogDescription>
+          </DialogHeader>
+          <div className='max-h-[min(50vh,28rem)] overflow-y-auto'>
+            <RichContent breaks content={popupAnnouncement?.content || ''} />
+            {popupAnnouncement?.extra ? (
+              <p className='text-muted-foreground mt-3 text-sm'>
+                {popupAnnouncement.extra}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button onClick={closePopup}>{t('I understand')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger
         render={
           <Button
@@ -371,6 +420,7 @@ export function NotificationPopover({
           </Button>
         </div>
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </>
   )
 }

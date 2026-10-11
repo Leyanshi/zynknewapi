@@ -51,6 +51,7 @@ import type {
   CreemProduct,
   WaffoPayMethod,
 } from '../types'
+import { CatfkShop } from './catfk-shop'
 import { CreemProductsSection } from './creem-products-section'
 
 interface RechargeFormCardProps {
@@ -142,6 +143,8 @@ export function RechargeFormCard({
     Array.isArray(waffoPayMethods) && waffoPayMethods.length > 0
   const minTopup = getMinTopupAmount(topupInfo)
   const redemptionEnabled = topupInfo?.enable_redemption !== false
+  const catfkEnabled =
+    !!topupLink?.startsWith('https://catfk.com/shop/') && redemptionEnabled
 
   if (loading) {
     return (
@@ -487,7 +490,9 @@ export function RechargeFormCard({
             </>
           )}
         </div>
-      ) : (
+      ) : null}
+      {catfkEnabled && <CatfkShop />}
+      {!hasAnyTopup && !catfkEnabled && (
         <Alert>
           <AlertDescription>
             {t(
@@ -545,7 +550,7 @@ export function RechargeFormCard({
               {t('Redeem')}
             </Button>
           </div>
-          {topupLink && (
+          {topupLink && !topupLink.startsWith('https://catfk.com/shop/') && (
             <p className='text-muted-foreground text-xs'>
               {t('Need a redemption code?')}{' '}
               <a

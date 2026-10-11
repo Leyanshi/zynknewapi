@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strings"
 	"sync"
 	"testing"
 
@@ -9,6 +10,52 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestCatfkRedemptionKey(t *testing.T) {
+	key := "0123456789abcdef0123456789abcdef"
+	for _, tc := range []struct{ card, want string }{
+		{key, key}, {"  $10  " + key + "\n", key}, {"🏃‍♀️100\t" + key, key},
+		{"", ""}, {"account password", ""}, {strings.Repeat("!", 32), ""},
+	} {
+		assert.Equal(t, tc.want, CatfkRedemptionKey(tc.card))
+	}
+}
+
+func TestCatfkDeliveryCreditsOnceAndPreservesUnredeemableCards(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&CatfkOrder{}, &Redemption{}))
+	user := User{Username: "catfk-test-buyer", Quota: 0}
+	require.NoError(t, DB.Create(&user).Error)
+	t.Cleanup(func() {
+		require.NoError(t, DB.Unscoped().Where("user_id = ?", user.Id).Delete(&CatfkOrder{}).Error)
+		require.NoError(t, DB.Unscoped().Where("user_id = ?", user.Id).Delete(&Redemption{}).Error)
+		require.NoError(t, DB.Unscoped().Delete(&user).Error)
+	})
+	code := Redemption{UserId: user.Id, Key: common.GetUUID(), Status: common.RedemptionCodeStatusEnabled, Quota: 500000}
+	require.NoError(t, code.Insert())
+	order := CatfkOrder{ID: common.GetUUID(), UserID: user.Id, TradeNo: common.GetUUID(), Status: "pending"}
+	require.NoError(t, DB.Create(&order).Error)
+	card := "$1 " + code.Key
+	require.NoError(t, CompleteCatfkOrder(order.ID, []string{card}, "help"))
+	require.NoError(t, CompleteCatfkOrder(order.ID, []string{card}, "help"))
+	require.NoError(t, DB.First(&user, user.Id).Error)
+	assert.Equal(t, 500000, user.Quota)
+	require.NoError(t, DB.First(&order, "id = ?", order.ID).Error)
+	assert.Equal(t, "redeemed", order.Status)
+	assert.Equal(t, 500000, order.Quota)
+	for _, card := range []string{"external-account secret", "$1 " + code.Key} {
+		manual := CatfkOrder{ID: common.GetUUID(), UserID: user.Id, TradeNo: common.GetUUID(), Status: "pending"}
+		require.NoError(t, DB.Create(&manual).Error)
+		require.NoError(t, CompleteCatfkOrder(manual.ID, []string{card}, "usage help"))
+		require.NoError(t, DB.First(&manual, "id = ?", manual.ID).Error)
+		assert.Equal(t, "manual", manual.Status)
+		var cards []string
+		require.NoError(t, common.UnmarshalJsonStr(manual.Cards, &cards))
+		assert.Equal(t, []string{card}, cards)
+		assert.Equal(t, "usage help", manual.Instructions)
+	}
+	require.NoError(t, DB.First(&user, user.Id).Error)
+	assert.Equal(t, 500000, user.Quota)
+}
 
 func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 	require.NoError(t, DB.AutoMigrate(&Redemption{}))

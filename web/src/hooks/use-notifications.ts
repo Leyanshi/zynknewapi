@@ -123,6 +123,15 @@ export function useNotifications() {
     }
   }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
 
+  const popupAnnouncement = useMemo(
+    () =>
+      announcements.find(
+        (item) =>
+          item.popup === true && !isAnnouncementRead(getAnnouncementKey(item))
+      ) || null,
+    [announcements, isAnnouncementRead]
+  )
+
   const markAnnouncementsAsRead = () => {
     if (announcements.length > 0) {
       const allKeys = announcements.map((item: Record<string, unknown>) =>
@@ -170,6 +179,9 @@ export function useNotifications() {
     // Data
     notice: noticeContent,
     announcements,
+    popupAnnouncement,
+    markAnnouncementRead: (item: Record<string, unknown>) =>
+      markAnnouncementsRead([getAnnouncementKey(item)]),
     loading: noticeLoading || statusLoading,
 
     // Unread counts

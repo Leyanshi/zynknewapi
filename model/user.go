@@ -571,9 +571,7 @@ func HardDeleteUserById(id int) (int64, error) {
 
 func inviteUser(inviterId int) error {
 	result := DB.Model(&User{}).Where("id = ?", inviterId).Updates(map[string]any{
-		"aff_count":   gorm.Expr("aff_count + ?", 1),
-		"aff_quota":   gorm.Expr("aff_quota + ?", common.QuotaForInviter),
-		"aff_history": gorm.Expr("aff_history + ?", common.QuotaForInviter),
+		"aff_count": gorm.Expr("aff_count + ?", 1),
 	})
 	if result.Error != nil {
 		return result.Error
@@ -585,6 +583,9 @@ func inviteUser(inviterId int) error {
 }
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
+	if !GetAffiliateCashbackRules().TransferEnabled {
+		return errors.New("cashback transfer is disabled by the administrator")
+	}
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {
 		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(common.QuotaFromFloat(common.QuotaPerUnit)))
@@ -608,17 +609,22 @@ func (user *User) TransferAffQuotaToQuota(quota int) error {
 		return errors.New("邀请额度不足！")
 	}
 
-	// 更新用户额度
-	user.AffQuota -= quota
-	user.Quota += quota
-
-	// 保存用户状态
-	if err := tx.Save(user).Error; err != nil {
+	if quota > common.MaxWalletQuota || user.Quota > common.MaxWalletQuota-quota {
+		return ErrWalletQuotaLimitExceeded
+	}
+	result := tx.Model(&User{}).Where("id = ? AND aff_quota >= ? AND quota <= ?", user.Id, quota, common.MaxWalletQuota-quota).
+		Updates(map[string]any{"aff_quota": gorm.Expr("aff_quota - ?", quota), "quota": gorm.Expr("quota + ?", quota)})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return errors.New("insufficient cashback or wallet quota limit exceeded")
+	}
+	if err := tx.Commit().Error; err != nil {
 		return err
 	}
-
-	// 提交事务
-	return tx.Commit().Error
+	syncCreditUserQuotaCache(user.Id, quota, "cashback transfer")
+	return nil
 }
 
 func (user *User) prepareForInsert(tx *gorm.DB) error {
@@ -722,11 +728,7 @@ func (user *User) finishInsert(inviterId int) {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
-		if common.QuotaForInviter > 0 {
-			//_ = IncreaseUserQuota(inviterId, common.QuotaForInviter)
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
-		}
+		_ = inviteUser(inviterId)
 	}
 }
 
@@ -779,10 +781,7 @@ func (user *User) FinalizeOAuthUserCreation(inviterId int) {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
 		}
-		if common.QuotaForInviter > 0 {
-			RecordLog(inviterId, LogTypeSystem, fmt.Sprintf("邀请用户赠送 %s", logger.LogQuota(common.QuotaForInviter)))
-			_ = inviteUser(inviterId)
-		}
+		_ = inviteUser(inviterId)
 	}
 }
 

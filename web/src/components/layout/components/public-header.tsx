@@ -296,9 +296,11 @@ export function PublicHeader(props: PublicHeaderProps) {
                   unreadCount={notifications.unreadCount}
                   activeTab={notifications.activeTab}
                   onTabChange={notifications.setActiveTab}
-                  notice={notifications.notice}
-                  announcements={notifications.announcements}
-                  loading={notifications.loading}
+              notice={notifications.notice}
+              announcements={notifications.announcements}
+              popupAnnouncement={notifications.popupAnnouncement}
+              onPopupRead={notifications.markAnnouncementRead}
+              loading={notifications.loading}
                 />
               )}
 
