@@ -19,7 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: new-api:local
+    image: ghcr.io/leyanshi/zynknewapi:latest
     pull_policy: never
     labels:
       com.centurylinklabs.watchtower.enable: "false"
