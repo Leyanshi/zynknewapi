@@ -60,7 +60,7 @@ services:
 
     depends_on:
       - redis
-      - postgres
+#      - postgres
 #      - mysql  # Uncomment if using MySQL
 #      - clickhouse  # Uncomment if using ClickHouse for LOG_SQL_DSN
     networks:
