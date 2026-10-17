@@ -25,7 +25,7 @@ import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
-import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
+import { CatfkOrderHistoryDialog } from './components/dialogs/catfk-order-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
@@ -373,7 +373,7 @@ export function Wallet(props: WalletProps) {
         transferring={transferring}
       />
 
-      <BillingHistoryDialog
+      <CatfkOrderHistoryDialog
         open={billingDialogOpen}
         onOpenChange={setBillingDialogOpen}
       />

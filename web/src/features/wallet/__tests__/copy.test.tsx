@@ -16,12 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import { createInstance } from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { beforeEach, expect, it, vi } from 'vitest'
 
 import { BillingHistoryDialog } from '@/features/wallet/components/dialogs/billing-history-dialog'
+import { CatfkOrderHistoryDialog } from '@/features/wallet/components/dialogs/catfk-order-history-dialog'
 import en from '@/i18n/locales/en.json'
 import zh from '@/i18n/locales/zh.json'
 import { api } from '@/lib/api'
@@ -71,6 +73,44 @@ it('translates billing history statuses and updates them when the language chang
   for (const label of ['Success', 'Pending', 'Expired']) {
     expect(screen.getByText(label)).toBeVisible()
   }
+})
+
+it('shows the current user CatFK orders in order history', async () => {
+  await i18n.changeLanguage('en')
+  vi.spyOn(api, 'get').mockResolvedValue({
+    data: {
+      success: true,
+      data: [
+        {
+          id: 'catfk-order-1',
+          name: 'Wallet credit',
+          trade_no: 'catfk-trade-1',
+          pay_url: '',
+          status: 'redeemed',
+          quota: 100,
+          cards: [],
+          instructions: '',
+          created_time: 1,
+        },
+      ],
+    },
+  })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+
+  render(
+    <QueryClientProvider client={client}>
+      <I18nextProvider i18n={i18n}>
+        <CatfkOrderHistoryDialog open onOpenChange={vi.fn()} />
+      </I18nextProvider>
+    </QueryClientProvider>
+  )
+
+  expect(await screen.findByText('catfk-trade-1')).toBeVisible()
+  expect(screen.getByText('Redeemed')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible()
+  expect(api.get).toHaveBeenCalledWith('/api/user/catfk/orders')
 })
 
 it.each([

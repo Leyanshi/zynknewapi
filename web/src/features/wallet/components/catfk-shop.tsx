@@ -50,8 +50,10 @@ export function CatfkShop() {
   const orders = useQuery({
     queryKey: ordersKey,
     queryFn: getCatfkOrders,
-    refetchInterval: 3000,
-    refetchIntervalInBackground: true,
+    // Refresh frequently only while a payment is active. The order history
+    // dialog performs an on-demand refresh for normal browsing.
+    refetchInterval: activeOrder ? 10_000 : false,
+    refetchIntervalInBackground: false,
   })
   const paymentChannel = channel ?? String(catalog.data?.channels[0]?.id ?? '')
   const purchase = useMutation({
@@ -99,8 +101,9 @@ export function CatfkShop() {
   }, [orders.data, activeOrder, locale, t])
 
   function buy() {
-    if (!selected || !paymentChannel || purchase.isPending || activeOrder)
-      {return}
+    if (!selected || !paymentChannel || purchase.isPending || activeOrder) {
+      return
+    }
     const paymentWindow = window.open(
       '',
       '_blank',
@@ -121,8 +124,9 @@ export function CatfkShop() {
   }
 
   if (catalog.isPending) return <LoadingState />
-  if (catalog.isError)
-    {return <ErrorState onRetry={() => void catalog.refetch()} />}
+  if (catalog.isError) {
+    return <ErrorState onRetry={() => void catalog.refetch()} />
+  }
   if (!catalog.data.enabled) return null
 
   return (
