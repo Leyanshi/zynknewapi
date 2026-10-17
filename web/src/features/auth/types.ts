@@ -87,8 +87,20 @@ export interface ApiResponse<T = unknown> {
 // System Status
 // ============================================================================
 
+export interface AffiliateCashbackRules {
+  description?: string
+  transfer_enabled: boolean
+  first_enabled?: boolean
+  first_percent?: number
+  regular_enabled?: boolean
+  regular_percent?: number
+  online_enabled?: boolean
+  code_enabled?: boolean
+  admin_enabled?: boolean
+}
+
 export interface SystemStatus {
-  affiliate_cashback?: { transfer_enabled: boolean }
+  affiliate_cashback?: AffiliateCashbackRules
   success?: boolean
   message?: string
   data?: {

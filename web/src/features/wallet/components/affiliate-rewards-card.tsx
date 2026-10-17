@@ -25,6 +25,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import type { AffiliateCashbackRules } from '@/features/auth/types'
 import { useStatus } from '@/hooks/use-status'
 import { formatQuota } from '@/lib/format'
 
@@ -38,6 +39,16 @@ interface AffiliateRewardsCardProps {
   loading?: boolean
 }
 
+function renderCashbackDescription(
+  template: string,
+  rules: AffiliateCashbackRules
+) {
+  return template.replace(/\{([a-z_]+)\}/g, (_match, name: string) => {
+    const value = rules[name as keyof AffiliateCashbackRules]
+    return value === undefined ? '' : String(value)
+  })
+}
+
 export function AffiliateRewardsCard({
   user,
   affiliateLink,
@@ -48,6 +59,12 @@ export function AffiliateRewardsCard({
   const { t } = useTranslation()
   const { status } = useStatus()
   const transferEnabled = status?.affiliate_cashback?.transfer_enabled ?? true
+  const cashbackRules = status?.affiliate_cashback
+  const description = cashbackRules?.description
+    ? renderCashbackDescription(cashbackRules.description, cashbackRules)
+    : t(
+        'Earn cashback when invited users recharge. Transfer availability is controlled by the administrator.'
+      )
   if (loading) {
     return (
       <Card data-card-hover='false' className='bg-muted/20 py-0'>
@@ -77,9 +94,7 @@ export function AffiliateRewardsCard({
               {t('Recharge Cashback')}
             </h3>
             <p className='text-muted-foreground line-clamp-1 text-xs'>
-              {t(
-                'Earn cashback when invited users recharge. Transfer availability is controlled by the administrator.'
-              )}
+              {description}
             </p>
           </div>
         </div>

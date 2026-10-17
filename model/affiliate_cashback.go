@@ -13,6 +13,7 @@ import (
 const AffiliateCashbackOption = "AffiliateCashback"
 
 type AffiliateCashbackRules struct {
+	Description     string  `json:"description"`
 	TransferEnabled bool    `json:"transfer_enabled"`
 	FirstEnabled    bool    `json:"first_enabled"`
 	FirstPercent    float64 `json:"first_percent"`

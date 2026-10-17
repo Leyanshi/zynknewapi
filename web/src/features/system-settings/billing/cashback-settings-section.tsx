@@ -24,6 +24,7 @@ import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 
 const schema = z.object({
+  description: z.string().max(500),
   transfer_enabled: z.boolean(),
   first_enabled: z.boolean(),
   first_percent: z.number().min(0).max(100),
@@ -39,6 +40,7 @@ export function CashbackSettingsSection(props: { value: string }) {
   const isRoot = useAuthStore((state) => state.auth.user?.role === 100)
   const updateOption = useUpdateOption()
   let defaults: z.infer<typeof schema> = {
+    description: '',
     transfer_enabled: true,
     first_enabled: false,
     first_percent: 0,
@@ -81,6 +83,29 @@ export function CashbackSettingsSection(props: { value: string }) {
             isSaving={updateOption.isPending}
             isSaveDisabled={!isRoot || !form.formState.isDirty}
             saveLabel='Save Settings'
+          />
+          <FormField
+            control={form.control}
+            name='description'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('Description')}</FormLabel>
+                <FormControl>
+                  <Input
+                    {...field}
+                    placeholder={t('Example:')}
+                    disabled={!isRoot || updateOption.isPending}
+                  />
+                </FormControl>
+                <p className='text-muted-foreground text-xs'>
+                  {t('Supported variables')}:{' '}
+                  {'{first_percent}, {regular_percent}, {first_enabled}, ' +
+                    '{regular_enabled}, {online_enabled}, {code_enabled}, ' +
+                    '{admin_enabled}'}
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
           />
           {(
             [

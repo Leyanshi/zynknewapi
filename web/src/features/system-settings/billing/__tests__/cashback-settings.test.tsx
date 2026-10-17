@@ -9,6 +9,7 @@ import { SettingsPageProvider } from '../../components/settings-page-context'
 import { CashbackSettingsSection } from '../cashback-settings-section'
 
 const rules = {
+  description: 'First: {first_percent}%, regular: {regular_percent}%',
   transfer_enabled: true,
   first_enabled: false,
   first_percent: 20,
@@ -88,6 +89,28 @@ test('non-root cannot change cashback rules', () => {
     expect(
       screen.getByRole('switch', { name: 'Allow cashback transfer to balance' })
     ).toHaveAttribute('aria-disabled', 'true')
+  } finally {
+    dispose()
+  }
+})
+
+test('root can edit the dynamic cashback description', async () => {
+  const dispose = renderSettings()
+  try {
+    const input = screen.getByLabelText('Description')
+    fireEvent.change(input, {
+      target: { value: 'Invite cashback: {regular_percent}%' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save Settings' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/api/option/', {
+        key: 'AffiliateCashback',
+        value: JSON.stringify({
+          ...rules,
+          description: 'Invite cashback: {regular_percent}%',
+        }),
+      })
+    )
   } finally {
     dispose()
   }

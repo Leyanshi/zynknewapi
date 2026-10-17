@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/tooltip'
 import { getCurrencyDisplay } from '@/lib/currency'
 import { formatQuota } from '@/lib/format'
+import { useAuthStore } from '@/stores/auth-store'
 import { useSystemConfigStore } from '@/stores/system-config-store'
 
 import {
@@ -49,10 +50,38 @@ import { UserQuotaCell } from './user-quota-cell'
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
   const currencyConfig = useSystemConfigStore((state) => state.config.currency)
+  const isRoot = useAuthStore((state) => state.auth.user?.role === 100)
   const { meta: currency } = getCurrencyDisplay()
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
   return useMemo<ColumnDef<User>[]>(
     () => [
+      ...(isRoot
+        ? [
+            {
+              id: 'cashback_info',
+              header: t('Recharge Cashback'),
+              cell: ({ row }: { row: { original: User } }) => (
+                <div className='text-xs'>
+                  <div>
+                    {t('Pending')}:{' '}
+                    <span className='tabular-nums'>
+                      {formatQuota(row.original.aff_quota || 0)}
+                    </span>
+                  </div>
+                  <div className='text-muted-foreground'>
+                    {t('Total Earned')}:{' '}
+                    <span className='tabular-nums'>
+                      {formatQuota(row.original.aff_history_quota || 0)}
+                    </span>
+                  </div>
+                </div>
+              ),
+              enableSorting: false,
+              size: 160,
+              meta: { mobileHidden: true },
+            } satisfies ColumnDef<User>,
+          ]
+        : []),
       {
         id: 'select',
         header: ({ table }) => (
@@ -244,7 +273,11 @@ export function useUsersColumns(): ColumnDef<User>[] {
           const affHistoryQuota = user.aff_history_quota || 0
           const inviterId = user.inviter_id || 0
 
-          if (affCount === 0 && affHistoryQuota === 0 && inviterId === 0) {
+          if (
+            affCount === 0 &&
+            affHistoryQuota === 0 &&
+            inviterId === 0
+          ) {
             return <span className='text-muted-foreground text-sm'>—</span>
           }
 
@@ -298,6 +331,6 @@ export function useUsersColumns(): ColumnDef<User>[] {
     ],
     // formatQuota reads the currency configuration from the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t, quotaUnit, currencyConfig]
+    [isRoot, t, quotaUnit, currencyConfig]
   )
 }

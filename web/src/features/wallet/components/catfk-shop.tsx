@@ -42,7 +42,6 @@ export function CatfkShop() {
   const [channel, setChannel] = useState<string | null>(null)
   const popup = useRef<Window | null>(null)
   const [activeOrder, setActiveOrder] = useState<string | null>(null)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const catalog = useQuery({
     queryKey: catalogKey,
     queryFn: getCatfkCatalog,
@@ -78,6 +77,14 @@ export function CatfkShop() {
     if (!paid) return
     setActiveOrder(null)
     const paidPopup = popup.current
+    // Close immediately after server-confirmed delivery, never based on the
+    // cross-origin URL or the user manually closing the payment window.
+    try {
+      paidPopup?.close()
+    } catch {
+      /* Browser may require manual closure. */
+    }
+    if (popup.current === paidPopup) popup.current = null
     if (paid.status === 'redeemed') {
       toast.success(
         t('Successfully recharged {{amount}}', {
@@ -89,24 +96,7 @@ export function CatfkShop() {
       )
       void getSelf().catch(handleServerError)
     }
-    closeTimer.current = setTimeout(() => {
-      // Only close after the backend confirms delivery. Never inspect the
-      // cross-origin URL or interpret the user closing the popup as payment.
-      try {
-        paidPopup?.close()
-      } catch {
-        /* Browser may require manual closure. */
-      }
-      if (popup.current === paidPopup) popup.current = null
-    }, 1000)
   }, [orders.data, activeOrder, locale, t])
-
-  useEffect(
-    () => () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current)
-    },
-    []
-  )
 
   function buy() {
     if (!selected || !paymentChannel || purchase.isPending || activeOrder)

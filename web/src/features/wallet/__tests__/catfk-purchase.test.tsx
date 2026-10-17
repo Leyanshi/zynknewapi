@@ -106,7 +106,7 @@ it('blocks sold-out products and does not create an order when the browser block
   expect(post).not.toHaveBeenCalled()
 })
 
-it('opens payment and closes the popup only after server-confirmed completion and a one-second delay', async () => {
+it.each(['manual', 'redeemed'])('closes payment immediately after server-confirmed %s completion', async (status) => {
   const { client, post, popup } = setup()
   fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
@@ -126,7 +126,7 @@ it('opens payment and closes the popup only after server-confirmed completion an
       client.setQueryData(key, [
         {
           ...order,
-          status: 'manual',
+          status,
           cards: ['original delivered card'],
           instructions: '<p>Use this card elsewhere</p>',
         },
@@ -135,19 +135,14 @@ it('opens payment and closes the popup only after server-confirmed completion an
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(screen.getByText('original delivered card')).toBeVisible()
-    expect(
-      screen.getByRole('button', { name: 'Copy to clipboard' })
-    ).toBeVisible()
-    expect(screen.getByText('Use this card elsewhere')).toBeVisible()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(999)
-    })
-    expect(popup.close).not.toHaveBeenCalled()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
     expect(popup.close).toHaveBeenCalledOnce()
+    if (status === 'manual') {
+      expect(screen.getByText('original delivered card')).toBeVisible()
+      expect(
+        screen.getByRole('button', { name: 'Copy to clipboard' })
+      ).toBeVisible()
+      expect(screen.getByText('Use this card elsewhere')).toBeVisible()
+    }
   } finally {
     vi.useRealTimers()
   }
