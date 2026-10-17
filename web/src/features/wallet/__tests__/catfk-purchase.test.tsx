@@ -20,22 +20,25 @@ const order = {
   quota: 0,
   cards: [],
   instructions: '',
-  created_time: 1,
+  created_time: Math.floor(Date.now() / 1000),
 }
 
 beforeEach(async () => {
-  await i18n
-    .use(initReactI18next)
-    .init({
-      lng: 'en',
-      resources: { en },
-      nsSeparator: false,
-      interpolation: { escapeValue: false },
-    })
+  await i18n.use(initReactI18next).init({
+    lng: 'en',
+    resources: { en },
+    nsSeparator: false,
+    interpolation: { escapeValue: false },
+  })
 })
 
 function setup(
-  options: { blocked?: boolean; empty?: boolean; fail?: boolean } = {}
+  options: {
+    blocked?: boolean
+    empty?: boolean
+    fail?: boolean
+    orders?: (typeof order)[]
+  } = {}
 ) {
   const popup = {
     opener: {},
@@ -47,8 +50,9 @@ function setup(
     options.blocked ? null : (popup as unknown as Window)
   )
   vi.spyOn(api, 'get').mockImplementation(async (url) => {
-    if (options.fail && String(url).endsWith('/catalog'))
-      {throw new Error('network unavailable')}
+    if (options.fail && String(url).endsWith('/catalog')) {
+      throw new Error('network unavailable')
+    }
     if (String(url).endsWith('/catalog')) {
       return {
         data: {
@@ -80,7 +84,7 @@ function setup(
         },
       }
     }
-    return { data: { success: true, data: [] } }
+    return { data: { success: true, data: options.orders ?? [] } }
   })
   const post = vi
     .spyOn(api, 'post')
@@ -106,46 +110,87 @@ it('blocks sold-out products and does not create an order when the browser block
   expect(post).not.toHaveBeenCalled()
 })
 
-it.each(['manual', 'redeemed'])('closes payment immediately after server-confirmed %s completion', async (status) => {
-  const { client, post, popup } = setup()
+it.each(['manual', 'redeemed'])(
+  'closes payment immediately after server-confirmed %s completion',
+  async (status) => {
+    const { client, post, popup } = setup()
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Wallet credit/ })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+    await waitFor(() =>
+      expect(popup.location.replace).toHaveBeenCalledWith(order.pay_url)
+    )
+    expect(post).toHaveBeenCalledWith('/api/user/catfk/orders', {
+      goods_key: 'credit',
+      channel_id: 1,
+    })
+    expect(popup.opener).toBeNull()
+    act(() => client.setQueryData(key, [order]))
+    expect(popup.close).not.toHaveBeenCalled()
+    vi.useFakeTimers()
+    try {
+      act(() =>
+        client.setQueryData(key, [
+          {
+            ...order,
+            status,
+            cards: ['original delivered card'],
+            instructions: '<p>Use this card elsewhere</p>',
+          },
+        ])
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(popup.close).toHaveBeenCalledOnce()
+      if (status === 'manual') {
+        expect(screen.getByText('original delivered card')).toBeVisible()
+        expect(
+          screen.getByRole('button', { name: 'Copy to clipboard' })
+        ).toBeVisible()
+        expect(screen.getByText('Use this card elsewhere')).toBeVisible()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+)
+
+it('hides a dismissed order from the shop list', async () => {
+  const { client } = setup({
+    orders: [
+      { ...order, created_time: Math.floor(Date.now() / 1000) },
+      {
+        ...order,
+        id: 'old-order',
+        trade_no: 'old-trade-no',
+        created_time: Math.floor(Date.now() / 1000) - 24 * 60 * 60,
+      },
+    ],
+  })
   fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
   await waitFor(() =>
-    expect(popup.location.replace).toHaveBeenCalledWith(order.pay_url)
+    expect(window.open).toHaveBeenCalledWith(
+      '',
+      '_blank',
+      'popup,width=960,height=760'
+    )
   )
-  expect(post).toHaveBeenCalledWith('/api/user/catfk/orders', {
-    goods_key: 'credit',
-    channel_id: 1,
-  })
-  expect(popup.opener).toBeNull()
-  act(() => client.setQueryData(key, [order]))
-  expect(popup.close).not.toHaveBeenCalled()
-  vi.useFakeTimers()
-  try {
-    act(() =>
-      client.setQueryData(key, [
-        {
-          ...order,
-          status,
-          cards: ['original delivered card'],
-          instructions: '<p>Use this card elsewhere</p>',
-        },
+  await waitFor(() =>
+    expect(client.getQueryData(key)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ trade_no: 'remote-one' }),
       ])
     )
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    expect(popup.close).toHaveBeenCalledOnce()
-    if (status === 'manual') {
-      expect(screen.getByText('original delivered card')).toBeVisible()
-      expect(
-        screen.getByRole('button', { name: 'Copy to clipboard' })
-      ).toBeVisible()
-      expect(screen.getByText('Use this card elsewhere')).toBeVisible()
-    }
-  } finally {
-    vi.useRealTimers()
-  }
+  )
+  await waitFor(() => expect(screen.getByText(/remote-one/)).toBeVisible())
+  expect(screen.queryByText(/old-trade-no/)).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+
+  expect(screen.queryByText(/remote-one/)).not.toBeInTheDocument()
 })
 
 it('renders an empty state when the shop has no products', async () => {

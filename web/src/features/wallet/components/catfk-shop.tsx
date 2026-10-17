@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import dayjs from 'dayjs'
+import { Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -42,6 +44,7 @@ export function CatfkShop() {
   const [channel, setChannel] = useState<string | null>(null)
   const popup = useRef<Window | null>(null)
   const [activeOrder, setActiveOrder] = useState<string | null>(null)
+  const [hiddenOrderIds, setHiddenOrderIds] = useState<string[]>([])
   const catalog = useQuery({
     queryKey: catalogKey,
     queryFn: getCatfkCatalog,
@@ -56,6 +59,11 @@ export function CatfkShop() {
     refetchIntervalInBackground: false,
   })
   const paymentChannel = channel ?? String(catalog.data?.channels[0]?.id ?? '')
+  const visibleOrders = orders.data?.filter(
+    (order) =>
+      dayjs(order.created_time * 1000).isSame(dayjs(), 'day') &&
+      !hiddenOrderIds.includes(order.id)
+  )
   const purchase = useMutation({
     mutationFn: createCatfkOrder,
     retry: false,
@@ -188,11 +196,23 @@ export function CatfkShop() {
       )}
       {orders.isError && <ErrorState onRetry={() => void orders.refetch()} />}
       <div className='space-y-3' aria-live='polite'>
-        {orders.data?.map((order) => (
+        {visibleOrders?.map((order) => (
           <div key={order.id} className='space-y-2 rounded-lg border p-3'>
-            <p className='text-sm font-medium break-words'>
-              {order.name} · {order.trade_no}
-            </p>
+            <div className='flex items-start justify-between gap-2'>
+              <p className='min-w-0 text-sm font-medium break-words'>
+                {order.name} · {order.trade_no}
+              </p>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='size-7 shrink-0'
+                aria-label={t('Delete')}
+                title={t('Delete')}
+                onClick={() => setHiddenOrderIds((ids) => [...ids, order.id])}
+              >
+                <Trash2 aria-hidden='true' />
+              </Button>
+            </div>
             {order.status === 'pending' && (
               <>
                 <p className='text-muted-foreground text-sm'>
