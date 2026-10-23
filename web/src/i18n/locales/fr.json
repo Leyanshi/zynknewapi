@@ -1919,6 +1919,7 @@
     "Do not keep sessions": "Sans maintien de session",
     "Do not over-trust this feature. IP may be spoofed. Please use with nginx, CDN and other gateways.": "Ne faites pas trop confiance à cette fonctionnalité. L'IP peut être usurpée. Veuillez l'utiliser avec nginx, CDN et autres passerelles.",
     "Do not repeat check-in; only once per day": "Ne répétez pas le check-in ; une seule fois par jour",
+    "Do not use VPNs or proxy tools when adding funds": "N’utilisez pas de VPN ni de proxy lors du rechargement",
     "Do not wait one second between polling async tasks for this channel": "Ne pas attendre une seconde entre les interrogations des tâches asynchrones pour ce canal",
     "Do regex replacement in the target field": "Effectuer un remplacement par expression régulière dans le champ cible",
     "Do string replacement in the target field": "Effectuer un remplacement de chaîne dans le champ cible",

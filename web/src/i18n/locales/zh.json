@@ -1919,6 +1919,7 @@
     "Do not keep sessions": "不保持",
     "Do not over-trust this feature. IP may be spoofed. Please use with nginx, CDN and other gateways.": "请勿过度信任此功能，IP 可能被伪造，请配合 nginx 和 cdn 等网关使用",
     "Do not repeat check-in; only once per day": "请勿重复签到；每天仅一次",
+    "Do not use VPNs or proxy tools when adding funds": "充值不要开启 VPN/科学上网工具",
     "Do not wait one second between polling async tasks for this channel": "该渠道轮询异步任务时不等待一秒",
     "Do regex replacement in the target field": "在目标字段里做正则替换",
     "Do string replacement in the target field": "在目标字段里做字符串替换",

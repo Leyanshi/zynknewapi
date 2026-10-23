@@ -145,6 +145,13 @@ export function RechargeFormCard({
   const redemptionEnabled = topupInfo?.enable_redemption !== false
   const catfkEnabled =
     !!topupLink?.startsWith('https://catfk.com/shop/') && redemptionEnabled
+  const rechargeNotice = (
+    <Alert>
+      <AlertDescription>
+        {t('Do not use VPNs or proxy tools when adding funds')}
+      </AlertDescription>
+    </Alert>
+  )
 
   if (loading) {
     return (
@@ -154,6 +161,7 @@ export function RechargeFormCard({
           <Skeleton className='mt-2 h-4 w-48' />
         </CardHeader>
         <CardContent className='space-y-4 p-3 sm:space-y-6 sm:p-5'>
+          {rechargeNotice}
           <div className='space-y-4 sm:space-y-6'>
             {/* Preset Amounts Skeleton */}
             <div className='space-y-3'>
@@ -219,6 +227,7 @@ export function RechargeFormCard({
       }
       contentClassName='space-y-4 sm:space-y-6'
     >
+      {rechargeNotice}
       {/* Online Topup Section */}
       {hasAnyTopup ? (
         <div className='space-y-4 sm:space-y-6'>

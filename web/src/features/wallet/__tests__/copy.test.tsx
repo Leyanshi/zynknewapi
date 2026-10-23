@@ -162,7 +162,11 @@ it.each([
       `支付 ${full}`
     )
     expect(screen.getByPlaceholderText('最低 1')).toBeVisible()
+    expect(screen.getByText('充值不要开启 VPN/科学上网工具')).toBeVisible()
     await act(() => i18n.changeLanguage('en'))
+    expect(
+      screen.getByText('Do not use VPNs or proxy tools when adding funds')
+    ).toBeVisible()
     expect(screen.getByRole('button', { name: /^100 / })).toHaveTextContent(
       `20% OFFPay ${paid} • Save ${saved}`
     )
@@ -170,5 +174,52 @@ it.each([
       `Pay ${full}`
     )
     expect(screen.getByPlaceholderText('Minimum 1')).toBeVisible()
+  }
+)
+
+it.each([
+  { state: 'loading', loading: true, topupLink: undefined },
+  { state: 'unavailable', loading: false, topupLink: undefined },
+  {
+    state: 'catalog failure',
+    loading: false,
+    topupLink: 'https://catfk.com/shop/zynk',
+  },
+])(
+  'keeps the VPN notice visible when products are $state',
+  async ({ loading, topupLink }) => {
+    vi.spyOn(api, 'get').mockRejectedValue(new Error('catalog unavailable'))
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={client}>
+        <I18nextProvider i18n={i18n}>
+          <RechargeFormCard
+            loading={loading}
+            topupLink={topupLink}
+            topupInfo={null}
+            presetAmounts={[]}
+            selectedPreset={null}
+            topupAmount={1}
+            paymentAmount={1}
+            calculating={false}
+            paymentLoading={null}
+            redemptionCode=''
+            redeeming={false}
+            onSelectPreset={vi.fn()}
+            onTopupAmountChange={vi.fn()}
+            onPaymentMethodSelect={vi.fn()}
+            onRedemptionCodeChange={vi.fn()}
+            onRedeem={vi.fn()}
+          />
+        </I18nextProvider>
+      </QueryClientProvider>
+    )
+    expect(screen.getByText('充值不要开启 VPN/科学上网工具')).toBeVisible()
+    if (topupLink) {
+      expect(await screen.findByRole('button', { name: '重试' })).toBeVisible()
+      expect(screen.getByText('充值不要开启 VPN/科学上网工具')).toBeVisible()
+    }
   }
 )

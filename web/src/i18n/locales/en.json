@@ -1919,6 +1919,7 @@
     "Do not keep sessions": "Do not keep sessions",
     "Do not over-trust this feature. IP may be spoofed. Please use with nginx, CDN and other gateways.": "Do not over-trust this feature. IP may be spoofed. Please use with nginx, CDN and other gateways.",
     "Do not repeat check-in; only once per day": "Do not repeat check-in; only once per day",
+    "Do not use VPNs or proxy tools when adding funds": "Do not use VPNs or proxy tools when adding funds",
     "Do not wait one second between polling async tasks for this channel": "Do not wait one second between polling async tasks for this channel",
     "Do regex replacement in the target field": "Do regex replacement in the target field",
     "Do string replacement in the target field": "Do string replacement in the target field",

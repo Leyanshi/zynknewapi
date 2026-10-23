@@ -1919,6 +1919,7 @@
     "Do not keep sessions": "Không giữ phiên",
     "Do not over-trust this feature. IP may be spoofed. Please use with nginx, CDN and other gateways.": "Đừng tin tưởng quá mức vào tính năng này. IP có thể bị giả mạo. Hãy sử dụng cùng với nginx, CDN và các gateway khác.",
     "Do not repeat check-in; only once per day": "Không lặp lại check-in; chỉ một lần mỗi ngày",
+    "Do not use VPNs or proxy tools when adding funds": "Không bật VPN hoặc công cụ proxy khi nạp tiền",
     "Do not wait one second between polling async tasks for this channel": "Không chờ một giây giữa các lần thăm dò tác vụ bất đồng bộ cho kênh này",
     "Do regex replacement in the target field": "Thực hiện thay thế regex trong trường đích",
     "Do string replacement in the target field": "Thực hiện thay thế chuỗi trong trường đích",

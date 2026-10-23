@@ -1919,6 +1919,7 @@
     "Do not keep sessions": "セッションを維持しない",
     "Do not over-trust this feature. IP may be spoofed. Please use with nginx, CDN and other gateways.": "この機能を過信しないでください。IPは偽装される可能性があります。nginx、CDNなどのゲートウェイと併用してください。",
     "Do not repeat check-in; only once per day": "チェックインを繰り返さないでください；1日1回のみ",
+    "Do not use VPNs or proxy tools when adding funds": "チャージ時は VPN やプロキシツールを使用しないでください",
     "Do not wait one second between polling async tasks for this channel": "このチャネルの非同期タスクをポーリングする間に1秒待機しない",
     "Do regex replacement in the target field": "ターゲットフィールドで正規表現置換",
     "Do string replacement in the target field": "ターゲットフィールドで文字列置換",
