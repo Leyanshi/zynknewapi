@@ -17,7 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createInstance } from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -76,6 +77,7 @@ it('translates billing history statuses and updates them when the language chang
 })
 
 it('shows the current user CatFK orders in order history', async () => {
+  const user = userEvent.setup()
   await i18n.changeLanguage('en')
   vi.spyOn(api, 'get').mockResolvedValue({
     data: {
@@ -84,7 +86,7 @@ it('shows the current user CatFK orders in order history', async () => {
         {
           id: 'catfk-order-1',
           name: 'Wallet credit',
-          trade_no: 'catfk-trade-1',
+          trade_no: 'CAT-trade-1',
           pay_url: '',
           status: 'redeemed',
           quota: 100,
@@ -107,10 +109,15 @@ it('shows the current user CatFK orders in order history', async () => {
     </QueryClientProvider>
   )
 
-  expect(await screen.findByText('catfk-trade-1')).toBeVisible()
+  expect(await screen.findByText('ZYNK-trade-1')).toBeVisible()
   expect(screen.getByText('Redeemed')).toBeVisible()
   expect(screen.getByRole('button', { name: 'Copy' })).toBeVisible()
   expect(api.get).toHaveBeenCalledWith('/api/user/catfk/orders')
+  const writeText = vi
+    .spyOn(navigator.clipboard, 'writeText')
+    .mockResolvedValue()
+  await user.click(screen.getByRole('button', { name: 'Copy' }))
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith('ZYNK-trade-1'))
 })
 
 it.each([

@@ -1,25 +1,31 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+  focusManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createInstance } from 'i18next'
 import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import en from '@/i18n/locales/en.json'
 import { api } from '@/lib/api'
 
+import type { CatfkOrder } from '../catfk-api'
 import { CatfkShop } from '../components/catfk-shop'
 
 const i18n = createInstance()
 const key = ['wallet', 'catfk', 'orders']
-const order = {
+const order: CatfkOrder = {
   id: 'order-one',
   name: 'Wallet credit',
-  trade_no: 'remote-one',
+  trade_no: 'CATremote-one',
   pay_url: 'https://catfk.com/shopApi/Pay/payment?trade_no=remote-one',
   status: 'pending',
   quota: 0,
   cards: [],
   instructions: '',
+  query_password: 'per-order-query-credential',
   created_time: Math.floor(Date.now() / 1000),
 }
 
@@ -32,12 +38,21 @@ beforeEach(async () => {
   })
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+  focusManager.setFocused(undefined)
+})
+
 function setup(
   options: {
     blocked?: boolean
     empty?: boolean
     fail?: boolean
     orders?: (typeof order)[]
+    syncOrders?: (typeof order)[]
+    syncFail?: boolean
+    directFail?: boolean
   } = {}
 ) {
   const popup = {
@@ -86,9 +101,30 @@ function setup(
     }
     return { data: { success: true, data: options.orders ?? [] } }
   })
-  const post = vi
-    .spyOn(api, 'post')
-    .mockResolvedValue({ data: { success: true, data: order } })
+  const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
+    if (String(url).endsWith('/redeem')) {
+      if (options.syncFail) throw new Error('sync unavailable')
+      return { data: { success: true, data: options.syncOrders?.[0] ?? order } }
+    }
+    return { data: { success: true, data: order } }
+  })
+  const direct = vi.fn().mockImplementation(async () => {
+    if (options.directFail) throw new TypeError('Failed to fetch')
+    return {
+      ok: true,
+      json: async () => ({
+        code: 1,
+        data: {
+          trade_no: order.trade_no,
+          status: options.syncOrders || options.syncFail ? 1 : 0,
+          quantity: 1,
+          goods: { goods_key: 'credit' },
+          response: { cards: ['delivered card'] },
+        },
+      }),
+    }
+  })
+  vi.stubGlobal('fetch', direct)
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -99,7 +135,7 @@ function setup(
       </I18nextProvider>
     </QueryClientProvider>
   )
-  return { client, post, popup }
+  return { client, post, popup, direct }
 }
 
 it('blocks sold-out products and does not create an order when the browser blocks the popup', async () => {
@@ -181,7 +217,7 @@ it('hides a dismissed order from the shop list', async () => {
   await waitFor(() =>
     expect(client.getQueryData(key)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ trade_no: 'remote-one' }),
+        expect.objectContaining({ trade_no: order.trade_no }),
       ])
     )
   )
@@ -204,4 +240,181 @@ it('renders an empty state when the shop has no products', async () => {
 it('offers retry when the shop catalog request fails', async () => {
   setup({ fail: true })
   expect(await screen.findByRole('button', { name: 'Retry' })).toBeVisible()
+})
+
+it.each(['manual', 'redeemed'] as const)(
+  'submits browser-delivered cards and closes the popup after local %s confirmation',
+  async (status) => {
+    const { post, popup } = setup({
+      syncOrders: [{ ...order, status, cards: ['delivered card'] }],
+    })
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Wallet credit/ })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+
+    await waitFor(() => expect(popup.close).toHaveBeenCalledOnce())
+    expect(post).toHaveBeenCalledWith(
+      '/api/user/catfk/orders/order-one/redeem',
+      {
+        cards: ['delivered card'],
+        instructions: '',
+      }
+    )
+    expect(screen.getByRole('button', { name: 'Buy and Pay' })).toBeEnabled()
+    if (status === 'redeemed') {
+      expect(screen.queryByText('delivered card')).not.toBeInTheDocument()
+    }
+  }
+)
+
+it('does not sync idle history and displays the branded order number', async () => {
+  const { post } = setup({ orders: [order] })
+  expect(await screen.findByText(/ZYNKremote-one/)).toBeVisible()
+  expect(screen.queryByText(/CATremote-one/)).not.toBeInTheDocument()
+  expect(post).not.toHaveBeenCalled()
+})
+
+it('keeps an unconfirmed payment open when sync fails and allows retry', async () => {
+  const { post, popup } = setup({ syncFail: true })
+  fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+  const retry = await screen.findByRole('button', { name: 'Retry' })
+  expect(popup.close).not.toHaveBeenCalled()
+  post.mockResolvedValue({
+    data: { success: true, data: { ...order, status: 'redeemed' } },
+  })
+  fireEvent.click(retry)
+  await waitFor(() => expect(popup.close).toHaveBeenCalledOnce())
+})
+
+it('does not close or credit the payment when only the browser reports paid', async () => {
+  const { post, popup } = setup({ syncOrders: [order] })
+  fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+  await waitFor(() =>
+    expect(post).toHaveBeenCalledWith(
+      '/api/user/catfk/orders/order-one/redeem',
+      expect.anything()
+    )
+  )
+  expect(popup.close).not.toHaveBeenCalled()
+  expect(screen.getByText('Waiting for payment or card delivery')).toBeVisible()
+})
+
+it('resumes an existing order without creating another order and closes after server confirmation', async () => {
+  const { post, popup } = setup({
+    orders: [order],
+    syncOrders: [{ ...order, status: 'redeemed' }],
+  })
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Continue Payment' })
+  )
+  await waitFor(() => expect(popup.close).toHaveBeenCalledOnce())
+  expect(post).not.toHaveBeenCalledWith(
+    '/api/user/catfk/orders',
+    expect.anything()
+  )
+  expect(window.open).toHaveBeenCalledWith(
+    order.pay_url,
+    '_blank',
+    'popup,width=960,height=760'
+  )
+})
+
+it('polls CatFK directly behind the popup, redeems locally, then stops polling', async () => {
+  const { direct, post, popup } = setup()
+  fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
+  vi.useFakeTimers()
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(direct).toHaveBeenCalledOnce()
+  expect(direct).toHaveBeenCalledWith(
+    'https://catfk.com/shopApi/Order/info',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json', Visitorid: order.id },
+      body: JSON.stringify({
+        trade_no: order.trade_no,
+        query_password: order.query_password,
+        dump: 1,
+      }),
+    })
+  )
+  expect(post).toHaveBeenCalledTimes(1)
+  expect(popup.close).not.toHaveBeenCalled()
+  focusManager.setFocused(false)
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10_000)
+  })
+  expect(direct).toHaveBeenCalledTimes(2)
+  expect(post).toHaveBeenCalledTimes(1)
+  direct.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      code: 1,
+      data: {
+        trade_no: order.trade_no,
+        status: 1,
+        quantity: 1,
+        goods: { goods_key: 'credit' },
+        response: { cards: ['delivered card'] },
+      },
+    }),
+  })
+  post.mockResolvedValue({
+    data: {
+      success: true,
+      data: { ...order, status: 'redeemed', quota: 100 },
+    },
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10_000)
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  expect(popup.close).toHaveBeenCalledOnce()
+  expect(post).toHaveBeenCalledWith(
+    '/api/user/catfk/orders/order-one/redeem',
+    expect.anything()
+  )
+  const calls = direct.mock.calls.length
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000)
+  })
+  expect(direct).toHaveBeenCalledTimes(calls)
+})
+
+it('retries only from the browser once a minute when direct requests are blocked', async () => {
+  const { direct, post, popup } = setup({ directFail: true })
+  fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
+  vi.useFakeTimers()
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(post).toHaveBeenCalledTimes(1)
+  expect(popup.close).not.toHaveBeenCalled()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000)
+  })
+  expect(direct).toHaveBeenCalledOnce()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000)
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  expect(direct).toHaveBeenCalledTimes(2)
+  expect(post).toHaveBeenCalledTimes(1)
+  expect(popup.close).not.toHaveBeenCalled()
 })

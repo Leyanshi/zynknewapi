@@ -27,9 +27,13 @@ import { handleServerError } from '@/lib/handle-server-error'
 
 import {
   createCatfkOrder,
+  formatCatfkTradeNo,
   getCatfkCatalog,
   getCatfkOrders,
+  getCatfkPaymentStatus,
+  redeemCatfkOrder,
   type CatfkGoods,
+  type CatfkOrder,
 } from '../catfk-api'
 import { formatCurrency } from '../lib/format'
 
@@ -48,15 +52,39 @@ export function CatfkShop() {
   const catalog = useQuery({
     queryKey: catalogKey,
     queryFn: getCatfkCatalog,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   })
   const orders = useQuery({
     queryKey: ordersKey,
     queryFn: getCatfkOrders,
-    // Refresh frequently only while a payment is active. The order history
-    // dialog performs an on-demand refresh for normal browsing.
-    refetchInterval: activeOrder ? 10_000 : false,
-    refetchIntervalInBackground: false,
+  })
+  const paymentSync = useQuery({
+    queryKey: ['wallet', 'catfk', 'sync', activeOrder],
+    enabled: !!activeOrder,
+    queryFn: async ({ signal }) => {
+      const currentOrders = client.getQueryData<CatfkOrder[]>(ordersKey) ?? []
+      const order = currentOrders.find((item) => item.id === activeOrder)
+      if (!order || order.status !== 'pending') return null
+      const delivery = await getCatfkPaymentStatus(order, signal)
+      if (!delivery || signal.aborted) return null
+      // The server verifies the bearer code against its own redemption table,
+      // not a browser-reported paid flag, price, quota or upstream response.
+      const redeemed = await redeemCatfkOrder(order.id, delivery)
+      if (!signal.aborted) {
+        await client.cancelQueries({ queryKey: ordersKey })
+        client.setQueryData<CatfkOrder[]>(ordersKey, (current = []) =>
+          current.map((item) => (item.id === redeemed.id ? redeemed : item))
+        )
+      }
+      return redeemed
+    },
+    retry: false,
+    staleTime: 10_000,
+    refetchInterval: (query) =>
+      query.state.status === 'error' ? 60_000 : 10_000,
+    // The wallet is often hidden behind the payment popup. Pausing here
+    // prevents paid windows from closing until the user returns to the wallet.
+    refetchIntervalInBackground: true,
   })
   const paymentChannel = channel ?? String(catalog.data?.channels[0]?.id ?? '')
   const visibleOrders = orders.data?.filter(
@@ -68,11 +96,14 @@ export function CatfkShop() {
     mutationFn: createCatfkOrder,
     retry: false,
     onSuccess: (order) => {
+      client.setQueryData<CatfkOrder[]>(ordersKey, (current = []) => [
+        order,
+        ...current.filter((item) => item.id !== order.id),
+      ])
       setActiveOrder(order.id)
       if (popup.current && !popup.current.closed) {
         popup.current.location.replace(order.pay_url)
       }
-      void client.invalidateQueries({ queryKey: ordersKey })
     },
     onError: (error) => {
       popup.current?.close()
@@ -128,6 +159,8 @@ export function CatfkShop() {
     purchase.mutate({
       goods_key: selected.goods_key,
       channel_id: Number(paymentChannel),
+      name: selected.name,
+      instructions: selected.description,
     })
   }
 
@@ -195,12 +228,15 @@ export function CatfkShop() {
         </div>
       )}
       {orders.isError && <ErrorState onRetry={() => void orders.refetch()} />}
+      {activeOrder && paymentSync.isError && (
+        <ErrorState onRetry={() => void paymentSync.refetch()} />
+      )}
       <div className='space-y-3' aria-live='polite'>
         {visibleOrders?.map((order) => (
           <div key={order.id} className='space-y-2 rounded-lg border p-3'>
             <div className='flex items-start justify-between gap-2'>
               <p className='min-w-0 text-sm font-medium break-words'>
-                {order.name} · {order.trade_no}
+                {order.name} · {formatCatfkTradeNo(order.trade_no)}
               </p>
               <Button
                 variant='ghost'
@@ -220,7 +256,19 @@ export function CatfkShop() {
                 </p>
                 <Button
                   variant='outline'
+                  disabled={
+                    purchase.isPending ||
+                    (!!activeOrder && activeOrder !== order.id)
+                  }
                   onClick={() => {
+                    if (
+                      activeOrder === order.id &&
+                      popup.current &&
+                      !popup.current.closed
+                    ) {
+                      popup.current.focus()
+                      return
+                    }
                     const paymentWindow = window.open(
                       order.pay_url,
                       '_blank',

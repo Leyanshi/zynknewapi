@@ -28,7 +28,7 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
 
-import { getCatfkOrders } from '../../catfk-api'
+import { formatCatfkTradeNo, getCatfkOrders } from '../../catfk-api'
 
 const ordersKey = ['wallet', 'catfk', 'orders']
 const statusLabels = {
@@ -87,10 +87,10 @@ export function CatfkOrderHistoryDialog({
                   <p className='font-medium break-words'>{order.name}</p>
                   <div className='mt-1 flex items-center gap-1'>
                     <code className='text-muted-foreground min-w-0 truncate text-xs'>
-                      {order.trade_no}
+                      {formatCatfkTradeNo(order.trade_no)}
                     </code>
                     <CopyButton
-                      value={order.trade_no}
+                      value={formatCatfkTradeNo(order.trade_no)}
                       variant='ghost'
                       className='size-6 shrink-0'
                       iconClassName='size-3'

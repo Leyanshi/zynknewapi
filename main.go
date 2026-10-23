@@ -120,7 +120,6 @@ func main() {
 
 	// 数据看板
 	go model.UpdateQuotaData()
-	go service.PollCatfkOrders()
 
 	if os.Getenv("CHANNEL_UPDATE_FREQUENCY") != "" {
 		frequency, err := strconv.Atoi(os.Getenv("CHANNEL_UPDATE_FREQUENCY"))

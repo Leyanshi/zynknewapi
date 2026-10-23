@@ -125,6 +125,8 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.GET("/catfk/catalog", controller.GetCatfkCatalog)
 				selfRoute.GET("/catfk/orders", controller.GetCatfkOrders)
 				selfRoute.POST("/catfk/orders", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("catfk-order"), controller.CreateCatfkOrder)
+				selfRoute.POST("/catfk/orders/:id/bind", middleware.UserCriticalRateLimit("catfk-order"), controller.BindCatfkOrder)
+				selfRoute.POST("/catfk/orders/:id/redeem", middleware.CriticalRateLimit(), middleware.UserCriticalRateLimit("catfk-redeem"), controller.RedeemCatfkOrder)
 				selfRoute.POST("/catfk/sync", middleware.UserCriticalRateLimit("catfk-sync"), controller.CatfkSync)
 				selfRoute.POST("/pay", middleware.CriticalRateLimit(), controller.RequestEpay)
 				selfRoute.POST("/amount", controller.RequestAmount)
