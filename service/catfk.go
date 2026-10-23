@@ -9,12 +9,39 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
+
+const (
+	// Catalog responses are stable for minutes; the wallet requests the
+	// catalog per shop visit, so caching keeps upstream traffic low and bounds
+	// the per-session burst the terminal sees.
+	catfkCatalogCacheLifetime = 5 * time.Minute
+
+	// Client syncs may reconcile one due pending order per request; orders
+	// checked more recently wait for the next sync round or the poller.
+	catfkOrderSyncInterval = 10 * time.Second
+
+	// Orders untouched by any client sync for this long are picked up by the
+	// background poller so payments still settle when no wallet is open.
+	catfkBackgroundSchedule = time.Hour
+)
+
+// catfkCatalog caches the latest successful catalog fetch.
+type catfkCatalogCacheEntry = struct {
+	sync.Mutex
+	token    string
+	goods    []CatfkGoods
+	channels []CatfkChannel
+	expires  time.Time
+}
+
+var catfkCatalog catfkCatalogCacheEntry
 
 var catfkClient = &http.Client{
 	Timeout:       20 * time.Second,
@@ -84,7 +111,15 @@ func catfkRequest(ctx context.Context, endpoint, visitor string, body any, targe
 	return envelope.Code == 1, nil
 }
 
+// GetCatfkCatalog returns the cached shop catalog and refreshes it at most
+// once per cache lifetime. Stock counts may lag the terminal by that window;
+// creating an order still validates stock on the terminal side.
 func GetCatfkCatalog(ctx context.Context, token string) ([]CatfkGoods, []CatfkChannel, error) {
+	catfkCatalog.Lock()
+	defer catfkCatalog.Unlock()
+	if catfkCatalog.token == token && time.Now().Before(catfkCatalog.expires) {
+		return catfkCatalog.goods, catfkCatalog.channels, nil
+	}
 	goods := make([]CatfkGoods, 0)
 	for page := 1; page <= 10; page++ {
 		var result struct {
@@ -112,6 +147,12 @@ func GetCatfkCatalog(ctx context.Context, token string) ([]CatfkGoods, []CatfkCh
 	if !ok {
 		return nil, nil, errors.New("无法读取支付方式")
 	}
+	// Only cache complete responses so a failed page never poisons later
+	// requests with a partial catalog.
+	catfkCatalog.token = token
+	catfkCatalog.goods = goods
+	catfkCatalog.channels = channels
+	catfkCatalog.expires = time.Now().Add(catfkCatalogCacheLifetime)
 	return goods, channels, nil
 }
 
@@ -228,28 +269,76 @@ func ReconcileCatfkOrder(ctx context.Context, order *model.CatfkOrder) error {
 	return model.CompleteCatfkOrder(order.ID, result.Response.Cards, instructions)
 }
 
-// Pending orders are durable; purchases still settle after the wallet closes
-// or the gateway restarts. CheckedTime provides fair scheduling of the queue.
+// SyncCatfkUserOrders reconciles one due pending order of the user — the same
+// server-fetched verification the poller uses — and then returns the user's
+// active orders. Client wallets call this every few seconds while a payment is
+// active, so fresh payments settle through client-driven syncs and the
+// background poller stays idle.
+func SyncCatfkUserOrders(ctx context.Context, userID int) ([]model.CatfkOrder, error) {
+	now := common.GetTimestamp()
+	var orders []model.CatfkOrder
+	if err := model.DB.Where("user_id = ? AND status = ? AND created_time > ? AND checked_time <= ?",
+		userID, "pending", now-7*86400, now-int64(catfkOrderSyncInterval.Seconds())).
+		Order("checked_time asc").Limit(3).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	for i := range orders {
+		// CAS on checked_time so concurrent syncs never duplicate remote calls
+		// for the same order; a failed CAS means another sync just handled it.
+		claim := model.DB.Model(&model.CatfkOrder{}).
+			Where("id = ? AND checked_time <= ?", orders[i].ID, now-int64(catfkOrderSyncInterval.Seconds())).
+			Update("checked_time", now)
+		if claim.Error != nil {
+			return nil, claim.Error
+		}
+		if claim.RowsAffected == 0 {
+			continue
+		}
+		if err := ReconcileCatfkOrder(ctx, &orders[i]); err != nil {
+			// A failed upstream call must not hide the current order list
+			// from the wallet; the next sync retries reconciliation.
+			common.SysError("catfk order sync failed for order " + orders[i].ID)
+		}
+	}
+	if err := model.DB.Where("user_id = ? AND status IN ?", userID, []string{"pending", "redeemed", "manual"}).
+		Order("created_time desc").Limit(20).Find(&orders).Error; err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+// PollCatfkOrders periodically reconciles pending orders that no client wallet
+// has synced for catfkBackgroundSchedule, bounding the upstream request rate
+// while still settling payments after the wallet closes or the gateway
+// restarts. CheckedTime provides fair scheduling of the queue.
 func PollCatfkOrders() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
 		if !operation_setting.IsPaymentComplianceConfirmed() {
 			continue
 		}
+		threshold := common.GetTimestamp() - int64(catfkBackgroundSchedule.Seconds())
 		var orders []model.CatfkOrder
-		if err := model.DB.Where("status = ? AND created_time > ?", "pending", common.GetTimestamp()-7*86400).
+		if err := model.DB.Where("status = ? AND created_time > ? AND checked_time < ?", "pending", common.GetTimestamp()-7*86400, threshold).
 			Order("checked_time asc").Limit(20).Find(&orders).Error; err != nil {
 			continue
 		}
 		for i := range orders {
+			// CAS on checked_time so multiple gateway instances never settle
+			// the same queue round in parallel.
+			claim := model.DB.Model(&model.CatfkOrder{}).
+				Where("id = ? AND checked_time < ?", orders[i].ID, threshold).
+				Update("checked_time", common.GetTimestamp())
+			if claim.Error != nil || claim.RowsAffected == 0 {
+				continue
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			err := ReconcileCatfkOrder(ctx, &orders[i])
 			cancel()
 			if err != nil {
 				common.SysError("catfk order reconciliation failed for order " + orders[i].ID)
 			}
-			model.DB.Model(&model.CatfkOrder{}).Where("id = ?", orders[i].ID).Update("checked_time", common.GetTimestamp())
 		}
 	}
 }

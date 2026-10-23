@@ -12,11 +12,15 @@ import (
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type catfkTestTransport func(*http.Request) (*http.Response, error)
 
 func (f catfkTestTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func resetCatfkCatalogCache() { catfkCatalog = catfkCatalogCacheEntry{} }
 
 func TestCatfkShopRequiresExplicitHTTPSShopConfiguration(t *testing.T) {
 	old := common.TopUpLink
@@ -56,6 +60,93 @@ func TestCatfkCatalogReadsNativeGoodsAndPaymentMethods(t *testing.T) {
 	assert.Equal(t, 5, goods[0].Extend.Stock)
 	require.Len(t, channels, 1)
 	assert.Equal(t, 1, channels[0].ID)
+}
+
+func TestCatfkCatalogCachesRequestsPerToken(t *testing.T) {
+	old := catfkClient
+	oldCatalog := catfkCatalog
+	t.Cleanup(func() {
+		catfkClient = old
+		catfkCatalog = oldCatalog
+	})
+	requests := 0
+	catfkClient = &http.Client{Transport: catfkTestTransport(func(req *http.Request) (*http.Response, error) {
+		requests++
+		assert.Equal(t, "catfk.com", req.URL.Host)
+		data := `{"code":1,"data":[{"id":1,"show_name":"Alipay"}]}`
+		if strings.HasSuffix(req.URL.Path, "goodsList") {
+			data = `{"code":1,"data":{"list":[{"goods_key":"credit","name":"Wallet credit","price":1,"contact_format":"any","extend":{"stock_count":5,"limit_count":1}}]}}`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(data)), Header: http.Header{}}, nil
+	})}
+	resetCatfkCatalogCache()
+	goods, channels, err := GetCatfkCatalog(context.Background(), "zynk")
+	require.NoError(t, err)
+	require.Len(t, goods, 1)
+	require.Len(t, channels, 1)
+	assert.Equal(t, 2, requests, "one catalog fetch posts goodsList once plus one channel request")
+
+	again, cachedChannels, err := GetCatfkCatalog(context.Background(), "zynk")
+	require.NoError(t, err)
+	assert.Equal(t, goods, again)
+	assert.Equal(t, channels, cachedChannels)
+	assert.Equal(t, 2, requests, "the cached catalog must not re-request the terminal")
+
+	_, _, err = GetCatfkCatalog(context.Background(), "other")
+	require.NoError(t, err)
+	assert.Equal(t, 4, requests, "a different shop token must fetch its own catalog")
+}
+
+func TestCatfkSyncReconcilesOneDueOrderAndReturnsActiveOrders(t *testing.T) {
+	oldDB := model.DB
+	t.Cleanup(func() { model.DB = oldDB })
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.CatfkOrder{}))
+	model.DB = db
+
+	setting := operation_setting.GetPaymentSetting()
+	oldCompliance, oldVersion := setting.ComplianceConfirmed, setting.ComplianceTermsVersion
+	setting.ComplianceConfirmed, setting.ComplianceTermsVersion = true, operation_setting.CurrentComplianceTermsVersion
+	t.Cleanup(func() { setting.ComplianceConfirmed, setting.ComplianceTermsVersion = oldCompliance, oldVersion })
+
+	oldClient := catfkClient
+	t.Cleanup(func() { catfkClient = oldClient })
+	remoteCalls := 0
+	catfkClient = &http.Client{Transport: catfkTestTransport(func(req *http.Request) (*http.Response, error) {
+		remoteCalls++
+		var body map[string]any
+		require.NoError(t, common.DecodeJson(req.Body, &body))
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(
+			`{"code":1,"data":{"status":1,"trade_no":"trade-one","quantity":1,"goods":{"goods_key":"credit"},"response":{"cards":["stored 32-char card elsewhere"]}}}`,
+		))}, nil
+	})}
+
+	now := common.GetTimestamp()
+	due := model.CatfkOrder{ID: "due", UserID: 7, GoodsKey: "credit", Name: "Wallet credit", TradeNo: "trade-one",
+		Status: "pending", CreatedTime: now, CheckedTime: 0}
+	fresh := model.CatfkOrder{ID: "fresh", UserID: 7, GoodsKey: "credit", Name: "Wallet credit", TradeNo: "trade-two",
+		Status: "pending", CreatedTime: now, CheckedTime: now}
+	other := model.CatfkOrder{ID: "other", UserID: 8, GoodsKey: "credit", Name: "Wallet credit", TradeNo: "trade-three",
+		Status: "pending", CreatedTime: now, CheckedTime: 0}
+	for _, seeded := range []model.CatfkOrder{due, fresh, other} {
+		require.NoError(t, model.DB.Create(&seeded).Error)
+	}
+
+	// A fresh sync must reconcile only the due order; the order checked a
+	// moment ago waits for the next interval instead of re-hitting upstream.
+	orders, err := SyncCatfkUserOrders(context.Background(), 7)
+	require.NoError(t, err)
+	assert.Equal(t, 1, remoteCalls, "one sync reconciles at most one due order")
+	require.Len(t, orders, 2)
+	assert.Equal(t, "due", orders[0].ID)
+	assert.Equal(t, "manual", orders[0].Status)
+	assert.Equal(t, "pending", orders[1].Status)
+
+	remoteCalls = 0
+	_, err = SyncCatfkUserOrders(context.Background(), 8)
+	require.NoError(t, err)
+	assert.Equal(t, 0, remoteCalls, "the just-reconciled due order stays inside the sync interval and must not be rechecked remotely")
 }
 
 func TestCatfkOrderDoesNotSettleUnpaidUndeliveredOrMismatchedResponses(t *testing.T) {
