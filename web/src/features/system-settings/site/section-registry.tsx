@@ -28,6 +28,7 @@ import { NoticeSection } from '../maintenance/notice-section'
 import { SidebarModulesSection } from '../maintenance/sidebar-modules-section'
 import type { SiteSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
+import { SeoSection } from './seo-section'
 
 const SITE_SECTIONS = [
   {
@@ -52,6 +53,13 @@ const SITE_SECTIONS = [
           },
         }}
       />
+    ),
+  },
+  {
+    id: 'seo',
+    titleKey: 'SEO',
+    build: (settings: SiteSettings) => (
+      <SeoSection defaultValue={settings['site_setting.custom_head_html']} />
     ),
   },
   {

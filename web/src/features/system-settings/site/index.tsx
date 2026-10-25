@@ -34,6 +34,7 @@ const defaultSiteSettings: SiteSettings = {
   ServerAddress: '',
   TaskPublicAddress: '',
   'general_setting.docs_link': '',
+  'site_setting.custom_head_html': '',
   'legal.user_agreement': '',
   'legal.privacy_policy': '',
   HeaderNavModules: '',

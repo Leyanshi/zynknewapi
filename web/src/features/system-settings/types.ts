@@ -150,6 +150,7 @@ export type SiteSettings = {
   ServerAddress: string
   TaskPublicAddress: string
   'general_setting.docs_link': string
+  'site_setting.custom_head_html': string
   'legal.user_agreement': string
   'legal.privacy_policy': string
   HeaderNavModules: string
