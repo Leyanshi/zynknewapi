@@ -1,0 +1,13 @@
+services:
+  qq-bot:
+    build: ./integrations/qq-bot
+    restart: unless-stopped
+    init: true
+    shm_size: 1gb
+    environment:
+      QQ_BOT_APP_ID: ${QQ_BOT_APP_ID:?Set QQ_BOT_APP_ID}
+      QQ_BOT_APP_SECRET: ${QQ_BOT_APP_SECRET:?Set QQ_BOT_APP_SECRET}
+      QQ_BOT_GROUP_OPENIDS: ${QQ_BOT_GROUP_OPENIDS:?Set QQ_BOT_GROUP_OPENIDS}
+      QQ_BOT_SITE_URL: ${QQ_BOT_SITE_URL:-https://zynk.bot.cd}
+    volumes:
+      - ./integrations/qq-bot/state:/state
