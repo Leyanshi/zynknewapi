@@ -49,6 +49,20 @@ export function CatfkShop() {
   const popup = useRef<Window | null>(null)
   const [activeOrder, setActiveOrder] = useState<string | null>(null)
   const [hiddenOrderIds, setHiddenOrderIds] = useState<string[]>([])
+
+  function closePaymentPopup() {
+    const paymentPopup = popup.current
+    if (!paymentPopup) return
+    let closed = false
+    try {
+      paymentPopup.close()
+      closed = true
+    } catch {
+      // A cross-origin payment popup can reject close in some browsers.
+    }
+    if (closed && popup.current === paymentPopup) popup.current = null
+  }
+
   const catalog = useQuery({
     queryKey: catalogKey,
     queryFn: getCatfkCatalog,
@@ -70,6 +84,10 @@ export function CatfkShop() {
       // The server verifies the bearer code against its own redemption table,
       // not a browser-reported paid flag, price, quota or upstream response.
       const redeemed = await redeemCatfkOrder(order.id, delivery)
+      // Close the external page as soon as the local server has accepted the
+      // delivery. Do this before checking the query signal: a refetch or
+      // unmount must not leave a paid CatFK page open.
+      if (redeemed.status !== 'pending') closePaymentPopup()
       if (!signal.aborted) {
         await client.cancelQueries({ queryKey: ordersKey })
         client.setQueryData<CatfkOrder[]>(ordersKey, (current = []) =>
@@ -95,7 +113,11 @@ export function CatfkShop() {
   const purchase = useMutation({
     mutationFn: createCatfkOrder,
     retry: false,
-    onSuccess: (order) => {
+    onSuccess: async (order) => {
+      // Do not let the initial order request, which may still be in flight,
+      // overwrite the newly bound order with its older snapshot. The payment
+      // sync query must always be able to read this order from the cache.
+      await client.cancelQueries({ queryKey: ordersKey })
       client.setQueryData<CatfkOrder[]>(ordersKey, (current = []) => [
         order,
         ...current.filter((item) => item.id !== order.id),
@@ -117,15 +139,9 @@ export function CatfkShop() {
     )
     if (!paid) return
     setActiveOrder(null)
-    const paidPopup = popup.current
     // Close immediately after server-confirmed delivery, never based on the
     // cross-origin URL or the user manually closing the payment window.
-    try {
-      paidPopup?.close()
-    } catch {
-      /* Browser may require manual closure. */
-    }
-    if (popup.current === paidPopup) popup.current = null
+    closePaymentPopup()
     if (paid.status === 'redeemed') {
       toast.success(
         t('Successfully recharged {{amount}}', {

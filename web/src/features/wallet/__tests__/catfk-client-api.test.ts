@@ -2,7 +2,11 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 
-import { createCatfkOrder, getCatfkCatalog } from '../catfk-api'
+import {
+  createCatfkOrder,
+  formatCatfkTradeNo,
+  getCatfkCatalog,
+} from '../catfk-api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -96,4 +100,8 @@ it('creates the payable order in the browser and only binds its identity on the 
     '/api/user/catfk/orders/local-order/bind',
     expect.objectContaining({ trade_no: 'CAT123' })
   )
+})
+
+it('replaces every upstream CAT marker in the displayed order number', () => {
+  expect(formatCatfkTradeNo('CAT-ABC-CAT123')).toBe('ZYNK-ABC-ZYNK123')
 })

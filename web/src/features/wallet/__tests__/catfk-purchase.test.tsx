@@ -50,6 +50,7 @@ function setup(
     empty?: boolean
     fail?: boolean
     orders?: (typeof order)[]
+    ordersResponse?: Promise<CatfkOrder[]>
     syncOrders?: (typeof order)[]
     syncFail?: boolean
     directFail?: boolean
@@ -99,7 +100,14 @@ function setup(
         },
       }
     }
-    return { data: { success: true, data: options.orders ?? [] } }
+    return {
+      data: {
+        success: true,
+        data: options.ordersResponse
+          ? await options.ordersResponse
+          : (options.orders ?? []),
+      },
+    }
   })
   const post = vi.spyOn(api, 'post').mockImplementation(async (url) => {
     if (String(url).endsWith('/redeem')) {
@@ -273,6 +281,30 @@ it('does not sync idle history and displays the branded order number', async () 
   expect(await screen.findByText(/ZYNKremote-one/)).toBeVisible()
   expect(screen.queryByText(/CATremote-one/)).not.toBeInTheDocument()
   expect(post).not.toHaveBeenCalled()
+})
+
+it('keeps the new payment available when an older order-list request finishes late', async () => {
+  let resolveOrders!: (orders: CatfkOrder[]) => void
+  const ordersResponse = new Promise<CatfkOrder[]>((resolve) => {
+    resolveOrders = resolve
+  })
+  const { client, popup } = setup({ ordersResponse })
+  fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+  await waitFor(() =>
+    expect(popup.location.replace).toHaveBeenCalledWith(order.pay_url)
+  )
+
+  await act(async () => {
+    resolveOrders([])
+    await ordersResponse
+  })
+  expect(screen.getByText(/ZYNKremote-one/)).toBeVisible()
+
+  await act(async () => {
+    client.setQueryData(key, [{ ...order, status: 'redeemed' }])
+  })
+  await waitFor(() => expect(popup.close).toHaveBeenCalledOnce())
 })
 
 it('keeps an unconfirmed payment open when sync fails and allows retry', async () => {
