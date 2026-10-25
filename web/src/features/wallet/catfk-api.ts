@@ -77,7 +77,7 @@ export async function getCatfkOrders(): Promise<CatfkOrder[]> {
 
 // Display branding must never change the upstream order identifier or pay URL.
 export function formatCatfkTradeNo(tradeNo: string): string {
-  return tradeNo.replace(/CAT/g, 'ZYNK')
+  return tradeNo.replaceAll('CAT', 'ZYNK')
 }
 
 async function catfkRequest<T>(

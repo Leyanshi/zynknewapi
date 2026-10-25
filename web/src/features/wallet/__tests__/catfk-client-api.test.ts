@@ -64,18 +64,16 @@ it('creates the payable order in the browser and only binds its identity on the 
           },
     },
   }))
-  const direct = vi
-    .fn()
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 1,
-        data: {
-          trade_no: 'CAT123',
-          payurl: 'https://catfk.com/shopApi/Pay/payment?trade_no=CAT123',
-        },
-      }),
-    })
+  const direct = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      code: 1,
+      data: {
+        trade_no: 'CAT123',
+        payurl: 'https://catfk.com/shopApi/Pay/payment?trade_no=CAT123',
+      },
+    }),
+  })
   vi.stubGlobal('fetch', direct)
 
   const order = await createCatfkOrder({ goods_key: 'credit', channel_id: 1 })
