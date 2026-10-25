@@ -33,25 +33,33 @@ import { api } from '@/lib/api'
 import { SettingsPageProvider } from '../../components/settings-page-context'
 import { SeoSection } from '../seo-section'
 
-function Fixture(props: { defaultValue: string }) {
+type SeoDefaults = {
+  homePageTitle: string
+  customHeadHTML: string
+}
+
+function Fixture(props: SeoDefaults) {
   const [container, setContainer] = useState<HTMLDivElement | null>(null)
   return (
     <>
       <div ref={setContainer} />
       <SettingsPageProvider actionsContainer={container}>
-        <SeoSection defaultValue={props.defaultValue} />
+        <SeoSection
+          defaultHomePageTitle={props.homePageTitle}
+          defaultCustomHeadHTML={props.customHeadHTML}
+        />
       </SettingsPageProvider>
     </>
   )
 }
 
-async function renderSeo(defaultValue: string) {
+async function renderSeo(defaults: SeoDefaults) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const router = createRouter({
     routeTree: createRootRoute({
-      component: () => <Fixture defaultValue={defaultValue} />,
+      component: () => <Fixture {...defaults} />,
     }),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
@@ -60,28 +68,49 @@ async function renderSeo(defaultValue: string) {
       <RouterProvider router={router} />
     </QueryClientProvider>
   )
-  return screen.findByRole('textbox', { name: 'Custom Head HTML' })
+  return {
+    titleInput: await screen.findByRole('textbox', {
+      name: 'Home Page Title',
+    }),
+    headInput: await screen.findByRole('textbox', {
+      name: 'Custom Head HTML',
+    }),
+  }
 }
 
 beforeEach(() => {
   vi.spyOn(api, 'put').mockResolvedValue({ data: { success: true } })
 })
 
-test('loads the saved custom head HTML', async () => {
-  const value = '<meta name="description" content="Existing">'
-  const input = await renderSeo(value)
-  expect(input).toHaveValue(value)
+test('loads the saved home page title and custom head HTML', async () => {
+  const { titleInput, headInput } = await renderSeo({
+    homePageTitle: 'Acme AI Gateway',
+    customHeadHTML: '<meta name="description" content="Existing">',
+  })
+
+  expect(titleInput).toHaveValue('Acme AI Gateway')
+  expect(headInput).toHaveValue('<meta name="description" content="Existing">')
 })
 
-test('saves edited custom head HTML to the site setting', async () => {
+test('saves edited home page title and custom head HTML', async () => {
   const user = userEvent.setup()
-  const input = await renderSeo('')
-  await user.type(input, '<meta name="robots" content="noindex">')
+  const { titleInput, headInput } = await renderSeo({
+    homePageTitle: '',
+    customHeadHTML: '',
+  })
+
+  await user.type(titleInput, 'Acme AI Gateway')
+  await user.type(headInput, '<meta name="robots" content="noindex">')
   await user.click(screen.getByRole('button', { name: 'Save Changes' }))
-  await waitFor(() =>
+
+  await waitFor(() => {
+    expect(api.put).toHaveBeenCalledWith('/api/option/', {
+      key: 'site_setting.home_page_title',
+      value: 'Acme AI Gateway',
+    })
     expect(api.put).toHaveBeenCalledWith('/api/option/', {
       key: 'site_setting.custom_head_html',
       value: '<meta name="robots" content="noindex">',
     })
-  )
+  })
 })

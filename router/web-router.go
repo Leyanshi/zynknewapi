@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"embed"
+	"html"
 	"net/http"
 	"strings"
 
@@ -37,7 +38,7 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.Han
 			if c.Request.URL.Path != "/index.html" {
 				return
 			}
-			serveIndexPage(c, assets.IndexPage)
+			serveIndexPage(c, assets.IndexPage, true)
 			c.Abort()
 		},
 		static.Serve("/", frontendFS),
@@ -46,14 +47,42 @@ func SetWebRouter(router *gin.Engine, assets WebAssets, pluginDispatcher gin.Han
 				controller.RelayNotFound(c)
 				return
 			}
-			serveIndexPage(c, assets.IndexPage)
+			serveIndexPage(c, assets.IndexPage, c.Request.URL.Path == "/")
 		},
 	)
 }
 
-func serveIndexPage(c *gin.Context, indexPage []byte) {
+func serveIndexPage(c *gin.Context, indexPage []byte, isHomePage bool) {
+	if isHomePage {
+		indexPage = replaceHomePageTitle(indexPage)
+	}
 	c.Header("Cache-Control", "no-cache")
 	c.Data(http.StatusOK, "text/html; charset=utf-8", injectCustomHeadHTML(indexPage))
+}
+
+func replaceHomePageTitle(indexPage []byte) []byte {
+	title := strings.TrimSpace(site_setting.GetSiteSetting().HomePageTitle)
+	if title == "" {
+		return indexPage
+	}
+
+	titleStart := bytes.Index(indexPage, []byte("<title>"))
+	if titleStart < 0 {
+		return indexPage
+	}
+	contentStart := titleStart + len("<title>")
+	contentEnd := bytes.Index(indexPage[contentStart:], []byte("</title>"))
+	if contentEnd < 0 {
+		return indexPage
+	}
+	contentEnd += contentStart
+
+	escapedTitle := html.EscapeString(title)
+	page := make([]byte, 0, len(indexPage)+len(escapedTitle))
+	page = append(page, indexPage[:contentStart]...)
+	page = append(page, escapedTitle...)
+	page = append(page, indexPage[contentEnd:]...)
+	return page
 }
 
 func injectCustomHeadHTML(indexPage []byte) []byte {

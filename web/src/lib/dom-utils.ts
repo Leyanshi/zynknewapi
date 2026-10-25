@@ -32,3 +32,21 @@ export function applyFaviconToDom(url: string) {
     // Ignore malformed URLs
   }
 }
+
+export function resolveDocumentTitle(
+  pathname: string,
+  systemName: string,
+  homePageTitle?: string
+): string {
+  const customTitle = homePageTitle?.trim()
+  const isHomePage = pathname === '/' || pathname === '/index.html'
+  return isHomePage && customTitle ? customTitle : systemName
+}
+
+export function applyDocumentTitle(title: string) {
+  if (typeof document === 'undefined') return
+  document.title = title
+  const metaTitle =
+    document.querySelector<HTMLMetaElement>('meta[name="title"]')
+  if (metaTitle) metaTitle.setAttribute('content', title)
+}

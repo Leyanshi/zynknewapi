@@ -30,6 +30,7 @@ import {
 import {
   STATUS_QUERY_KEY,
   ensureStatus,
+  mapStatusDataToConfig,
   statusQueryOptions,
 } from '@/lib/status-query'
 import { useSystemConfigStore } from '@/stores/system-config-store'
@@ -87,6 +88,15 @@ afterEach(() => {
   apiClient.get = originalGet
   window.localStorage.clear()
   useSystemConfigStore.setState(useSystemConfigStore.getInitialState(), true)
+})
+
+test('maps the configured home page title from status data', () => {
+  expect(
+    mapStatusDataToConfig({
+      system_name: 'New API',
+      home_page_title: 'Acme AI Gateway',
+    }).homePageTitle
+  ).toBe('Acme AI Gateway')
 })
 
 describe('shared status query deduplication', () => {

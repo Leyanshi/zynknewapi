@@ -56,14 +56,17 @@ func TestWebIndexInjectionSkipsAPIPaths(t *testing.T) {
 	}
 }
 
-func TestWebIndexPageWithoutCustomHeadHTMLIsUnchanged(t *testing.T) {
+func TestWebIndexPageWithoutSiteHTMLIsUnchanged(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	settings := site_setting.GetSiteSetting()
-	previous := settings.CustomHeadHTML
+	previousTitle := settings.HomePageTitle
+	previousHeadHTML := settings.CustomHeadHTML
 	t.Cleanup(func() {
-		settings.CustomHeadHTML = previous
+		settings.HomePageTitle = previousTitle
+		settings.CustomHeadHTML = previousHeadHTML
 	})
+	settings.HomePageTitle = ""
 	settings.CustomHeadHTML = ""
 
 	outer := gin.New()
@@ -72,4 +75,33 @@ func TestWebIndexPageWithoutCustomHeadHTMLIsUnchanged(t *testing.T) {
 	response := performPluginRequest(outer, http.MethodGet, "/")
 	require.Equal(t, http.StatusOK, response.Code)
 	assert.Equal(t, webIndexPageForTest, response.Body.String())
+}
+
+func TestWebHomePageTitleOnlyOnHomePage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	settings := site_setting.GetSiteSetting()
+	previous := settings.HomePageTitle
+	t.Cleanup(func() {
+		settings.HomePageTitle = previous
+	})
+	settings.HomePageTitle = "Welcome & More"
+
+	outer := gin.New()
+	SetWebRouter(outer, WebAssets{IndexPage: []byte(webIndexPageForTest)}, func(c *gin.Context) { c.Next() })
+
+	for _, path := range []string{"/", "/index.html"} {
+		t.Run(path, func(t *testing.T) {
+			response := performPluginRequest(outer, http.MethodGet, path)
+			require.Equal(t, http.StatusOK, response.Code)
+			assert.Contains(t, response.Body.String(), "<title>Welcome &amp; More</title>")
+		})
+	}
+
+	t.Run("/security", func(t *testing.T) {
+		response := performPluginRequest(outer, http.MethodGet, "/security")
+		require.Equal(t, http.StatusOK, response.Code)
+		assert.Contains(t, response.Body.String(), "<title>New API</title>")
+		assert.NotContains(t, response.Body.String(), "Welcome &amp; More")
+	})
 }

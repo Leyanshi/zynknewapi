@@ -22,6 +22,7 @@ import {
   createRootRouteWithContext,
   Outlet,
   redirect,
+  useLocation,
   useNavigate,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
@@ -41,15 +42,23 @@ import {
   clearAuthentication,
 } from '@/lib/auth-session'
 import { subscribeAuthSessionEvents } from '@/lib/auth-session-sync'
+import { applyDocumentTitle, resolveDocumentTitle } from '@/lib/dom-utils'
 import { resolveLegacyRoute } from '@/lib/legacy-route'
 import { useAuthStore } from '@/stores/auth-store'
 
 function RootComponent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { pathname } = useLocation()
 
   // Load system configuration (logo, system name, etc.) from backend
-  useSystemConfig({ autoLoad: true })
+  const { systemName, homePageTitle } = useSystemConfig({ autoLoad: true })
+
+  useEffect(() => {
+    applyDocumentTitle(
+      resolveDocumentTitle(pathname, systemName, homePageTitle)
+    )
+  }, [homePageTitle, pathname, systemName])
 
   useEffect(() => {
     const aff = new URLSearchParams(window.location.search).get('aff')?.trim()

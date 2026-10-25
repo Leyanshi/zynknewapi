@@ -30,6 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
@@ -42,6 +43,7 @@ import { useUpdateOption } from '../hooks/use-update-option'
 
 const seoSchema = z.object({
   site_setting: z.object({
+    home_page_title: z.string(),
     custom_head_html: z.string(),
   }),
 })
@@ -49,7 +51,8 @@ const seoSchema = z.object({
 type SeoFormValues = z.infer<typeof seoSchema>
 
 type SeoSectionProps = {
-  defaultValue: string
+  defaultHomePageTitle: string
+  defaultCustomHeadHTML: string
 }
 
 export function SeoSection(props: SeoSectionProps) {
@@ -65,7 +68,8 @@ export function SeoSection(props: SeoSectionProps) {
       >,
       defaultValues: {
         site_setting: {
-          custom_head_html: props.defaultValue ?? '',
+          home_page_title: props.defaultHomePageTitle ?? '',
+          custom_head_html: props.defaultCustomHeadHTML ?? '',
         },
       },
       onSubmit: async (_data, changedFields) => {
@@ -92,6 +96,24 @@ export function SeoSection(props: SeoSectionProps) {
               isResetDisabled={!isDirty}
             />
             <FormDirtyIndicator isDirty={isDirty} />
+            <FormField
+              control={form.control}
+              name='site_setting.home_page_title'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Home Page Title')}</FormLabel>
+                  <FormControl>
+                    <Input placeholder='New API' {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Custom title for the homepage only. Leave empty to use the system name.'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name='site_setting.custom_head_html'

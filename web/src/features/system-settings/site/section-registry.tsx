@@ -59,7 +59,10 @@ const SITE_SECTIONS = [
     id: 'seo',
     titleKey: 'SEO',
     build: (settings: SiteSettings) => (
-      <SeoSection defaultValue={settings['site_setting.custom_head_html']} />
+      <SeoSection
+        defaultHomePageTitle={settings['site_setting.home_page_title']}
+        defaultCustomHeadHTML={settings['site_setting.custom_head_html']}
+      />
     ),
   },
   {

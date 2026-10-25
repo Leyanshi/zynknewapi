@@ -93,6 +93,10 @@ export function mapStatusDataToConfig(
 
   return {
     systemName: (data.system_name as string | undefined) || DEFAULT_SYSTEM_NAME,
+    homePageTitle:
+      typeof data.home_page_title === 'string'
+        ? data.home_page_title
+        : undefined,
     logo: (data.logo as string | undefined) || DEFAULT_LOGO,
     footerHtml: data.footer_html as string | undefined,
     demoSiteEnabled: data.demo_site_enabled as boolean | undefined,
