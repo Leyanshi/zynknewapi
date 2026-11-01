@@ -151,14 +151,26 @@ function tokenTrendSpec(
   })
   const colors = getDashboardChartColors(5)
   return {
-    type: 'line',
+    type: 'area',
     data: [{ id: 'token-usage', values: [...values, ...hitRateValues] }],
     xField: 'time',
     yField: 'value',
     seriesField: 'series',
+    stack: false,
     legends: { visible: rows.length > 0, orient: 'bottom' },
     point: { visible: false },
-    line: { style: { curveType: 'monotone' } },
+    area: {
+      style: {
+        fillOpacity: 0.06,
+        curveType: 'monotone',
+      },
+    },
+    line: {
+      style: {
+        lineWidth: 2,
+        curveType: 'monotone',
+      },
+    },
     axes: [
       {
         orient: 'left',
@@ -196,7 +208,8 @@ function tokenTrendSpec(
       visible: values.length === 0,
       text: labels.empty,
     },
-    tooltip: { mark: { content: [] } },
+    background: { fill: 'transparent' },
+    animation: true,
   }
 }
 
