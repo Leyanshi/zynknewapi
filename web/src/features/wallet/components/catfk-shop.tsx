@@ -79,11 +79,16 @@ export function CatfkShop() {
       const currentOrders = client.getQueryData<CatfkOrder[]>(ordersKey) ?? []
       const order = currentOrders.find((item) => item.id === activeOrder)
       if (!order || order.status !== 'pending') return null
-      const delivery = await getCatfkPaymentStatus(order, signal)
-      if (!delivery || signal.aborted) return null
+      const paymentStatus = await getCatfkPaymentStatus(order, signal)
+      if (!paymentStatus || signal.aborted) return null
+      if (paymentStatus.paid) closePaymentPopup()
+      if (!paymentStatus.delivery) return paymentStatus
       // The server verifies the bearer code against its own redemption table,
       // not a browser-reported paid flag, price, quota or upstream response.
-      const redeemed = await redeemCatfkOrder(order.id, delivery)
+      const redeemed = await redeemCatfkOrder(
+        order.id,
+        paymentStatus.delivery
+      )
       // Close the external page as soon as the local server has accepted the
       // delivery. Do this before checking the query signal: a refetch or
       // unmount must not leave a paid CatFK page open.

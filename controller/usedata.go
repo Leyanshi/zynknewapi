@@ -129,3 +129,29 @@ func GetUserFlowQuotaDates(c *gin.Context) {
 	})
 	return
 }
+
+func GetUserDashboardTokenTrend(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	if endTimestamp-startTimestamp > 2592000 {
+		common.ApiErrorMsg(c, "time range cannot exceed 30 days")
+		return
+	}
+	rows, err := model.GetDashboardTokenTrend(
+		c.GetInt("id"),
+		startTimestamp,
+		endTimestamp,
+		c.DefaultQuery("granularity", "hour"),
+	)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    rows,
+	})
+}

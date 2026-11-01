@@ -48,6 +48,14 @@ export interface FlowQuotaDataItem {
   quota?: number
 }
 
+export interface DashboardTokenTrendItem {
+  bucket: number
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+}
+
 export type FlowMetric = 'quota' | 'tokens' | 'requests'
 
 export type FlowOverflowMode = 'aggregate' | 'hide'

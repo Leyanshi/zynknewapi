@@ -132,6 +132,41 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 	require.Equal(t, 175, selfRows[0].Quota)
 }
 
+func TestGetDashboardTokenTrendAggregatesOwnedConsumeLogs(t *testing.T) {
+	truncateTables(t)
+	require.NoError(t, LOG_DB.Create(&[]Log{
+		{
+			UserId: 1, CreatedAt: 3601, Type: LogTypeConsume,
+			PromptTokens: 100, CompletionTokens: 20,
+			Other: `{"cache_tokens":30,"cache_creation_tokens":10}`,
+		},
+		{
+			UserId: 1, CreatedAt: 3699, Type: LogTypeConsume,
+			PromptTokens: 200, CompletionTokens: 40,
+			Other: `{"cache_tokens":50,"cache_creation_tokens_5m":5,"cache_creation_tokens_1h":7}`,
+		},
+		{
+			UserId: 2, CreatedAt: 3700, Type: LogTypeConsume,
+			PromptTokens: 999, CompletionTokens: 999,
+			Other: `{"cache_tokens":999,"cache_creation_tokens":999}`,
+		},
+		{
+			UserId: 1, CreatedAt: 3700, Type: LogTypeTopup,
+			PromptTokens: 999, CompletionTokens: 999,
+			Other: `{"cache_tokens":999,"cache_creation_tokens":999}`,
+		},
+	}).Error)
+
+	rows, err := GetDashboardTokenTrend(1, 3600, 7200, "hour")
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.EqualValues(t, 3600, rows[0].Bucket)
+	require.EqualValues(t, 300, rows[0].InputTokens)
+	require.EqualValues(t, 60, rows[0].OutputTokens)
+	require.EqualValues(t, 22, rows[0].CacheCreation)
+	require.EqualValues(t, 80, rows[0].CacheRead)
+}
+
 func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	truncateTables(t)
 	CacheQuotaDataLock.Lock()

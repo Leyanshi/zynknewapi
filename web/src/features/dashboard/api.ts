@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 
 import type {
   FlowQuotaDataItem,
+  DashboardTokenTrendItem,
   QuotaDataItem,
   UptimeGroupResult,
 } from './types'
@@ -81,6 +82,19 @@ export async function getFlowQuotaDates(
     data?: FlowQuotaDataItem[]
     message?: string
   }>(endpoint, { params })
+  return res.data
+}
+
+export async function getUserDashboardTokenTrend(params: {
+  start_timestamp: number
+  end_timestamp: number
+  granularity: string
+}) {
+  const res = await api.get<{
+    success: boolean
+    data?: DashboardTokenTrendItem[]
+    message?: string
+  }>('/api/data/token-trend/self', { params })
   return res.data
 }
 

@@ -122,10 +122,15 @@ export interface CatfkDelivery {
   instructions: string
 }
 
+export interface CatfkPaymentStatus {
+  paid: boolean
+  delivery?: CatfkDelivery
+}
+
 export async function getCatfkPaymentStatus(
   order: CatfkOrder,
   signal: AbortSignal
-): Promise<CatfkDelivery | null> {
+): Promise<CatfkPaymentStatus | null> {
   if (!order.query_password) {
     throw createServerError({}, t('Something went wrong!'))
   }
@@ -141,7 +146,7 @@ export async function getCatfkPaymentStatus(
     { trade_no: order.trade_no, query_password: order.query_password, dump: 1 },
     signal
   )
-  if (result.status !== 1) return null
+  if (result.status !== 1) return { paid: false }
   if (
     result.trade_no !== order.trade_no ||
     result.quantity !== 1 ||
@@ -149,11 +154,14 @@ export async function getCatfkPaymentStatus(
   ) {
     throw createServerError({}, t('Something went wrong!'))
   }
-  if (!result.response?.cards?.length) return null
-  return {
-    cards: result.response.cards,
-    instructions: result.goods?.extend?.instructions || order.instructions,
+  let delivery: CatfkDelivery | undefined
+  if (result.response?.cards?.length) {
+    delivery = {
+      cards: result.response.cards,
+      instructions: result.goods?.extend?.instructions || order.instructions,
+    }
   }
+  return { paid: true, delivery }
 }
 
 export async function redeemCatfkOrder(

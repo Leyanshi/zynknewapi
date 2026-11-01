@@ -37,7 +37,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
-import { useId, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -69,6 +69,12 @@ import { FAQPanel } from './faq-panel'
 import { PerformanceHealthPanel } from './performance-health-panel'
 import { SummaryCards } from './summary-cards'
 import { UptimePanel } from './uptime-panel'
+
+const UsageAnalytics = lazy(() =>
+  import('./usage-analytics').then((module) => ({
+    default: module.UsageAnalytics,
+  }))
+)
 
 const SETUP_GUIDE_VISIBILITY_STORAGE_KEY =
   'dashboard_overview_setup_guide_expanded'
@@ -788,6 +794,13 @@ export function OverviewDashboard() {
           )}
 
           <SummaryCards />
+          <Suspense
+            fallback={
+              <div className='h-[42rem] animate-pulse rounded-lg border bg-muted/20' />
+            }
+          >
+            <UsageAnalytics />
+          </Suspense>
 
           {showContentPanels && (
             <CardStaggerContainer

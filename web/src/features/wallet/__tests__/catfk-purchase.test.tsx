@@ -54,6 +54,7 @@ function setup(
     syncOrders?: (typeof order)[]
     syncFail?: boolean
     directFail?: boolean
+    paidWithoutDelivery?: boolean
   } = {}
 ) {
   const popup = {
@@ -124,10 +125,15 @@ function setup(
         code: 1,
         data: {
           trade_no: order.trade_no,
-          status: options.syncOrders || options.syncFail ? 1 : 0,
+          status:
+            options.syncOrders || options.syncFail || options.paidWithoutDelivery
+              ? 1
+              : 0,
           quantity: 1,
           goods: { goods_key: 'credit' },
-          response: { cards: ['delivered card'] },
+          response: options.paidWithoutDelivery
+            ? {}
+            : { cards: ['delivered card'] },
         },
       }),
     }
@@ -307,12 +313,12 @@ it('keeps the new payment available when an older order-list request finishes la
   await waitFor(() => expect(popup.close).toHaveBeenCalledOnce())
 })
 
-it('keeps an unconfirmed payment open when sync fails and allows retry', async () => {
+it('closes a paid checkout when redemption sync fails and allows retry', async () => {
   const { post, popup } = setup({ syncFail: true })
   fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
   const retry = await screen.findByRole('button', { name: 'Retry' })
-  expect(popup.close).not.toHaveBeenCalled()
+  expect(popup.close).toHaveBeenCalledOnce()
   post.mockResolvedValue({
     data: { success: true, data: { ...order, status: 'redeemed' } },
   })
@@ -320,7 +326,7 @@ it('keeps an unconfirmed payment open when sync fails and allows retry', async (
   await waitFor(() => expect(popup.close).toHaveBeenCalledOnce())
 })
 
-it('does not close or credit the payment when only the browser reports paid', async () => {
+it('closes a paid checkout without crediting until CatFK delivers a card', async () => {
   const { post, popup } = setup({ syncOrders: [order] })
   fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
@@ -330,8 +336,59 @@ it('does not close or credit the payment when only the browser reports paid', as
       expect.anything()
     )
   )
-  expect(popup.close).not.toHaveBeenCalled()
+  expect(popup.close).toHaveBeenCalledOnce()
   expect(screen.getByText('Waiting for payment or card delivery')).toBeVisible()
+})
+
+it('closes the checkout after payment confirmation even when card delivery is delayed', async () => {
+  const { direct, post, popup } = setup({ paidWithoutDelivery: true })
+  fireEvent.click(await screen.findByRole('button', { name: /Wallet credit/ }))
+  vi.useFakeTimers()
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Buy and Pay' }))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
+
+  expect(direct).toHaveBeenCalledOnce()
+  expect(popup.close).toHaveBeenCalledOnce()
+  expect(post).not.toHaveBeenCalledWith(
+    '/api/user/catfk/orders/order-one/redeem',
+    expect.anything()
+  )
+
+  direct.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      code: 1,
+      data: {
+        trade_no: order.trade_no,
+        status: 1,
+        quantity: 1,
+        goods: { goods_key: 'credit' },
+        response: { cards: ['delivered card'] },
+      },
+    }),
+  })
+  post.mockResolvedValue({
+    data: {
+      success: true,
+      data: { ...order, status: 'redeemed', quota: 100 },
+    },
+  })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10_000)
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  expect(post).toHaveBeenCalledWith(
+    '/api/user/catfk/orders/order-one/redeem',
+    expect.anything()
+  )
+  expect(popup.close).toHaveBeenCalledOnce()
+  vi.useRealTimers()
 })
 
 it('resumes an existing order without creating another order and closes after server confirmation', async () => {
