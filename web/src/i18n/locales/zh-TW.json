@@ -929,6 +929,7 @@
     "Cache Directory Disk Space": "緩存目錄磁碟空間",
     "Cache Directory Info": "緩存目錄資訊",
     "Cache Entries": "緩存條目",
+    "Cache Hit": "快取命中",
     "Cache Hit Rate": "快取命中率",
     "Cache mode": "緩存模式",
     "Cache pricing": "緩存定價",

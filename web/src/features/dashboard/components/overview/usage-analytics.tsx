@@ -95,7 +95,7 @@ function pieSpec(
     categoryField: 'name',
     outerRadius: 0.82,
     innerRadius: 0.48,
-    padAngle: 1,
+    padAngle: 0,
     legends: { visible: visibleValues.length > 0, orient: 'bottom' },
     label: { visible: false },
     title: {
@@ -132,8 +132,7 @@ function tokenTrendSpec(
     input: string
     output: string
     cacheCreation: string
-    cacheRead: string
-    cacheHitRate: string
+    cacheHit: string
     tokens: string
     empty: string
   }
@@ -144,7 +143,7 @@ function tokenTrendSpec(
       [labels.input, row.input_tokens],
       [labels.output, row.output_tokens],
       [labels.cacheCreation, row.cache_creation_tokens],
-      [labels.cacheRead, row.cache_read_tokens],
+      [labels.cacheHit, row.cache_read_tokens],
     ] as const
     return series.map(([name, value]) => ({
       time,
@@ -152,19 +151,10 @@ function tokenTrendSpec(
       value: Number(value) || 0,
     }))
   })
-  const hitRateValues = rows.map((row) => {
-    const input = Number(row.input_tokens) || 0
-    const cacheRead = Number(row.cache_read_tokens) || 0
-    return {
-      time: formatChartTime(row.bucket, granularity),
-      series: labels.cacheHitRate,
-      value: input > 0 ? (cacheRead / input) * 100 : 0,
-    }
-  })
-  const colors = getDashboardChartColors(5)
+  const colors = getDashboardChartColors(4)
   return {
     type: 'line',
-    data: [{ id: 'token-usage', values: [...values, ...hitRateValues] }],
+    data: [{ id: 'token-usage', values }],
     xField: 'time',
     yField: 'value',
     seriesField: 'series',
@@ -179,17 +169,9 @@ function tokenTrendSpec(
           labels.input,
           labels.output,
           labels.cacheCreation,
-          labels.cacheRead,
+          labels.cacheHit,
         ],
         title: { visible: true, text: labels.tokens },
-      },
-      {
-        orient: 'right',
-        type: 'linear',
-        seriesId: [labels.cacheHitRate],
-        min: 0,
-        max: 100,
-        title: { visible: true, text: `${labels.cacheHitRate} (%)` },
       },
       { orient: 'bottom', type: 'band', label: { visible: true } },
     ],
@@ -199,8 +181,7 @@ function tokenTrendSpec(
         labels.input,
         labels.output,
         labels.cacheCreation,
-        labels.cacheRead,
-        labels.cacheHitRate,
+        labels.cacheHit,
       ],
       range: colors,
     },
@@ -328,8 +309,7 @@ export function UsageAnalytics() {
           input: t('Input'),
           output: t('Output'),
           cacheCreation: t('Cache Creation'),
-          cacheRead: t('Cache Read'),
-          cacheHitRate: t('Cache Hit Rate'),
+          cacheHit: t('Cache Hit'),
           tokens: t('Tokens'),
           empty: t('No data available'),
         }
