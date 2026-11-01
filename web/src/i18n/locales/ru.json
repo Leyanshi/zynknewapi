@@ -242,6 +242,7 @@
     "Actively check all channels": "Активно проверять все каналы",
     "Actively check auto-disable-enabled channels": "Активно проверять каналы с автоотключением",
     "Actual Amount": "Фактическая сумма",
+    "Actual Cost": "Фактическая стоимость",
     "Actual Model": "Фактическая модель",
     "Actual Model:": "Фактическая модель:",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "Адаптировать запросы с суффиксом `-thinking` к собственному режиму размышления Anthropic, сохраняя предсказуемость биллинга.",

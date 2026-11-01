@@ -105,6 +105,7 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 		TokenUsed:   60,
 		Count:       3,
 		Quota:       150,
+		GroupRatio:  1,
 	}, *rootRows[0])
 	// A token that still exists resolves to its current name.
 	require.Equal(t, 22, rootRows[1].TokenID)
@@ -120,6 +121,7 @@ func TestGetFlowQuotaDataUsesQuotaDataRoleSpecificDimensions(t *testing.T) {
 	require.Equal(t, "vip", adminRows[0].UseGroup)
 	require.Equal(t, "east", adminRows[0].ChannelName)
 	require.Equal(t, 150, adminRows[0].Quota)
+	require.Equal(t, float64(1), adminRows[0].GroupRatio)
 
 	selfRows, err := GetFlowQuotaData(900, 2000, "", 1, common.RoleCommonUser)
 	require.NoError(t, err)

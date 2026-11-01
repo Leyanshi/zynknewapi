@@ -242,6 +242,7 @@
     "Actively check all channels": "Actively check all channels",
     "Actively check auto-disable-enabled channels": "Actively check auto-disable-enabled channels",
     "Actual Amount": "Actual Amount",
+    "Actual Cost": "Actual Cost",
     "Actual Model": "Actual Model",
     "Actual Model:": "Actual Model:",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.",

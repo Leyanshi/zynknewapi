@@ -242,6 +242,7 @@
     "Actively check all channels": "主动检查全部渠道",
     "Actively check auto-disable-enabled channels": "主动检查已开启自动禁用的渠道",
     "Actual Amount": "实付金额",
+    "Actual Cost": "实际花费",
     "Actual Model": "实际模型",
     "Actual Model:": "实际模型：",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "将带 `-thinking` 后缀的请求适配为 Anthropic 原生思考请求，并保持计费可预测。",

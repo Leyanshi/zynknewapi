@@ -242,6 +242,7 @@
     "Actively check all channels": "Chủ động kiểm tra tất cả kênh",
     "Actively check auto-disable-enabled channels": "Chủ động kiểm tra kênh đã bật tự động vô hiệu hóa",
     "Actual Amount": "Số tiền thực tế",
+    "Actual Cost": "Chi phí thực tế",
     "Actual Model": "Mô hình thực tế",
     "Actual Model:": "Mô hình thực tế:",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "Điều chỉnh các yêu cầu có hậu tố `-thinking` sang hành vi suy luận gốc của Anthropic trong khi vẫn giữ tính phí dễ dự đoán.",

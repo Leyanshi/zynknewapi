@@ -31,6 +31,7 @@ export interface QuotaDataItem {
   token_used?: number
   count?: number
   quota?: number
+  group_ratio?: number
 }
 
 export interface FlowQuotaDataItem {
@@ -46,6 +47,7 @@ export interface FlowQuotaDataItem {
   token_used?: number
   count?: number
   quota?: number
+  group_ratio?: number
 }
 
 export interface DashboardTokenTrendItem {

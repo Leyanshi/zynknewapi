@@ -242,6 +242,7 @@
     "Actively check all channels": "すべてのチャネルを定期チェック",
     "Actively check auto-disable-enabled channels": "自動無効化が有効なチャネルを定期チェック",
     "Actual Amount": "実際の金額",
+    "Actual Cost": "実際の費用",
     "Actual Model": "実際のモデル",
     "Actual Model:": "実際のモデル：",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "`-thinking` サフィックス付きリクエストを Anthropic ネイティブの思考動作に適配し、課金を予測可能に保ちます。",

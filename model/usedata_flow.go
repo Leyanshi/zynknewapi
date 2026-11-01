@@ -4,22 +4,24 @@ import (
 	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"gorm.io/gorm"
 )
 
 type FlowQuotaData struct {
-	UserID      int    `json:"user_id,omitempty" gorm:"column:user_id"`
-	Username    string `json:"username,omitempty" gorm:"column:username"`
-	NodeName    string `json:"node_name,omitempty" gorm:"column:node_name"`
-	TokenID     int    `json:"token_id,omitempty" gorm:"column:token_id"`
-	TokenName   string `json:"token_name,omitempty" gorm:"-"`
-	UseGroup    string `json:"use_group" gorm:"column:use_group"`
-	ChannelID   int    `json:"channel_id,omitempty" gorm:"column:channel_id"`
-	ChannelName string `json:"channel_name,omitempty" gorm:"-"`
-	ModelName   string `json:"model_name" gorm:"column:model_name"`
-	TokenUsed   int    `json:"token_used" gorm:"column:token_used"`
-	Count       int    `json:"count" gorm:"column:count"`
-	Quota       int    `json:"quota" gorm:"column:quota"`
+	UserID      int     `json:"user_id,omitempty" gorm:"column:user_id"`
+	Username    string  `json:"username,omitempty" gorm:"column:username"`
+	NodeName    string  `json:"node_name,omitempty" gorm:"column:node_name"`
+	TokenID     int     `json:"token_id,omitempty" gorm:"column:token_id"`
+	TokenName   string  `json:"token_name,omitempty" gorm:"-"`
+	UseGroup    string  `json:"use_group" gorm:"column:use_group"`
+	ChannelID   int     `json:"channel_id,omitempty" gorm:"column:channel_id"`
+	ChannelName string  `json:"channel_name,omitempty" gorm:"-"`
+	ModelName   string  `json:"model_name" gorm:"column:model_name"`
+	TokenUsed   int     `json:"token_used" gorm:"column:token_used"`
+	Count       int     `json:"count" gorm:"column:count"`
+	Quota       int     `json:"quota" gorm:"column:quota"`
+	GroupRatio  float64 `json:"group_ratio" gorm:"-"`
 }
 
 func GetFlowQuotaData(startTime int64, endTime int64, username string, userID int, role int) ([]*FlowQuotaData, error) {
@@ -51,6 +53,7 @@ func getSelfFlowQuotaData(startTime int64, endTime int64, userID int) ([]*FlowQu
 	if err != nil {
 		return nil, err
 	}
+	fillFlowGroupRatios(rows, userID)
 	return rows, fillFlowTokenNames(rows)
 }
 
@@ -68,6 +71,7 @@ func getAdminFlowQuotaData(startTime int64, endTime int64, username string) ([]*
 	if err != nil {
 		return nil, err
 	}
+	fillFlowGroupRatios(rows, 0)
 	return rows, fillFlowChannelNames(rows)
 }
 
@@ -85,6 +89,7 @@ func getRootFlowQuotaData(startTime int64, endTime int64, username string) ([]*F
 	if err != nil {
 		return nil, err
 	}
+	fillFlowGroupRatios(rows, 0)
 	if err := fillFlowTokenNames(rows); err != nil {
 		return rows, err
 	}
@@ -127,6 +132,30 @@ func fillFlowTokenNames(rows []*FlowQuotaData) error {
 		}
 	}
 	return nil
+}
+
+func fillFlowGroupRatios(rows []*FlowQuotaData, defaultUserID int) {
+	userGroups := make(map[int]string)
+	for _, row := range rows {
+		row.GroupRatio = ratio_setting.GetGroupRatio(row.UseGroup)
+		userID := row.UserID
+		if userID == 0 {
+			userID = defaultUserID
+		}
+		userGroup := userGroups[userID]
+		if userGroup == "" && userID > 0 {
+			if user, err := GetUserCache(userID); err == nil {
+				userGroup = user.Group
+				userGroups[userID] = userGroup
+			}
+		}
+		if specialRatio, ok := ratio_setting.GetGroupGroupRatio(userGroup, row.UseGroup); ok {
+			row.GroupRatio = specialRatio
+		}
+		if row.GroupRatio <= 0 {
+			row.GroupRatio = 1
+		}
+	}
 }
 
 func fillFlowChannelNames(rows []*FlowQuotaData) error {

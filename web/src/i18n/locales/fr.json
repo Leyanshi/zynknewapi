@@ -242,6 +242,7 @@
     "Actively check all channels": "Vérifier activement tous les canaux",
     "Actively check auto-disable-enabled channels": "Vérifier activement les canaux avec désactivation automatique",
     "Actual Amount": "Montant réel",
+    "Actual Cost": "Coût réel",
     "Actual Model": "Modèle réel",
     "Actual Model:": "Modèle réel :",
     "Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.": "Adapter les requêtes avec le suffixe `-thinking` au comportement de pensée natif d’Anthropic tout en gardant une facturation prévisible.",
