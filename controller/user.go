@@ -512,6 +512,7 @@ func buildSelfUserData(user *model.User) map[string]any {
 		"aff_code":          user.AffCode,
 		"aff_count":         user.AffCount,
 		"aff_quota":         user.AffQuota,
+		"is_promoter":       user.IsPromoter,
 		"aff_history_quota": user.AffHistoryQuota,
 		"inviter_id":        user.InviterId,
 		"linux_do_id":       user.LinuxDOId,
@@ -1079,10 +1080,11 @@ func updateAdminPermissionsForUserInTx(c *gin.Context, tx *gorm.DB, userID int, 
 }
 
 type ManageRequest struct {
-	Id     int    `json:"id"`
-	Action string `json:"action"`
-	Value  int    `json:"value"`
-	Mode   string `json:"mode"`
+	Id      int    `json:"id"`
+	Action  string `json:"action"`
+	Value   int    `json:"value"`
+	Mode    string `json:"mode"`
+	Enabled *bool  `json:"enabled"`
 }
 
 // ManageUser Only admin user can do this
@@ -1096,6 +1098,10 @@ func ManageUser(c *gin.Context) {
 	}
 	if req.Action == "add_quota" {
 		manageUserQuota(c, req)
+		return
+	}
+	if req.Action == "set_promoter" || req.Action == "adjust_cashback" {
+		manageUserCashback(c, req)
 		return
 	}
 	user := model.User{

@@ -65,6 +65,7 @@ export interface UserProfile {
   aff_count: number
   /** Affiliate quota (pending rewards) */
   aff_quota: number
+  is_promoter?: boolean
   /** Total affiliate quota earned (historical) */
   aff_history_quota: number
   /** Invite user ID */

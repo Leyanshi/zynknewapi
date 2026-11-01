@@ -34,10 +34,10 @@ func TestRechargeCashback(t *testing.T) {
 		name, source            string
 		balance, used, expected int
 	}{
-		{"first online", "online", 0, 0, 200},
-		{"first code", "code", 0, 0, 200},
-		{"nonzero balance", "online", 1, 0, 50},
-		{"nonzero usage", "code", 0, 1, 50},
+		{"first online", "online", 0, 0, 80},
+		{"first code", "code", 0, 0, 80},
+		{"nonzero balance", "online", 1, 0, 80},
+		{"nonzero usage", "code", 0, 1, 80},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inviter := User{Username: common.GetUUID(), AffCode: common.GetUUID()}
@@ -66,17 +66,17 @@ func TestRechargeCashback(t *testing.T) {
 	_, err := AdjustUserQuota(buyer.Id, common.RoleRootUser, "add", 1000)
 	require.NoError(t, err)
 	require.NoError(t, DB.First(&inviter, inviter.Id).Error)
-	assert.Equal(t, 200, inviter.AffQuota)
+	assert.Equal(t, 80, inviter.AffQuota)
 	common.OptionMapRWMutex.Lock()
 	common.OptionMap[AffiliateCashbackOption] = `{"transfer_enabled":false,"first_enabled":true,"first_percent":20,"regular_enabled":true,"regular_percent":5,"online_enabled":false,"code_enabled":false,"admin_enabled":false}`
 	common.OptionMapRWMutex.Unlock()
 	require.NoError(t, DB.Transaction(func(tx *gorm.DB) error { return creditRechargeQuota(tx, buyer.Id, 1000, nil, "code") }))
 	require.NoError(t, DB.First(&inviter, inviter.Id).Error)
-	assert.Equal(t, 200, inviter.AffQuota, "disabled sources must not earn cashback")
+	assert.Equal(t, 160, inviter.AffQuota, "all recharge sources use the fixed rule despite legacy settings")
 	_, err = AdjustUserQuota(buyer.Id, common.RoleRootUser, "subtract", 100)
 	require.NoError(t, err)
 	require.NoError(t, DB.First(&inviter, inviter.Id).Error)
-	assert.Equal(t, 200, inviter.AffQuota, "debits must never earn cashback")
+	assert.Equal(t, 160, inviter.AffQuota, "debits must never earn cashback")
 	common.OptionMapRWMutex.Lock()
 	common.OptionMap[AffiliateCashbackOption] = `{"transfer_enabled":true,"first_enabled":true,"first_percent":20,"regular_enabled":true,"regular_percent":5,"online_enabled":false,"code_enabled":true,"admin_enabled":false}`
 	common.OptionMapRWMutex.Unlock()
@@ -88,13 +88,13 @@ func TestRechargeCashback(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.NoError(t, DB.First(&inviter, inviter.Id).Error)
-	assert.Equal(t, 200, inviter.AffQuota, "failed settlements must roll back cashback")
+	assert.Equal(t, 160, inviter.AffQuota, "failed settlements must roll back cashback")
 	require.NoError(t, DB.Model(&User{}).Where("id = ?", inviter.Id).Update("aff_quota", 500000).Error)
 	require.NoError(t, inviter.TransferAffQuotaToQuota(500000))
 	require.NoError(t, DB.First(&inviter, inviter.Id).Error)
 	assert.Zero(t, inviter.AffQuota)
 	assert.Equal(t, 500000, inviter.Quota)
-	assert.Equal(t, 200, inviter.AffHistoryQuota, "transfers must not generate another reward")
+	assert.Equal(t, 160, inviter.AffHistoryQuota, "transfers must not generate another reward")
 }
 
 func TestCashbackRulesRejectInvalidPercentages(t *testing.T) {

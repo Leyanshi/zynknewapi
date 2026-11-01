@@ -97,6 +97,8 @@ export interface AffiliateCashbackRules {
   online_enabled?: boolean
   code_enabled?: boolean
   admin_enabled?: boolean
+  promoter_first_min_cny?: number
+  promoter_first_reward_cny?: number
 }
 
 export interface SystemStatus {

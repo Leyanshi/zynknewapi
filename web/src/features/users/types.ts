@@ -49,6 +49,7 @@ export const userSchema = z.object({
   aff_code: z.string().optional(),
   aff_count: z.number().optional(),
   aff_quota: z.number().optional(),
+  is_promoter: z.boolean().optional(),
   aff_history_quota: z.number().optional(),
   inviter_id: z.number().optional(),
   linux_do_id: z.string().optional(),
@@ -140,7 +141,7 @@ export type QuotaAdjustMode = 'add' | 'subtract' | 'override'
 
 export interface ManageUserQuotaPayload {
   id: number
-  action: 'add_quota'
+  action: 'add_quota' | 'adjust_cashback'
   mode: QuotaAdjustMode
   value: number
 }

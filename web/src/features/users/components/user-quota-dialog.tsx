@@ -37,6 +37,7 @@ interface UserQuotaDialogProps {
   onOpenChange: (open: boolean) => void
   userId: number
   currentQuota: number
+  target?: 'wallet' | 'cashback'
   onSuccess: () => void
 }
 
@@ -45,6 +46,10 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
   const [mode, setMode] = useState<QuotaAdjustMode>('add')
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
+  const isCashback = props.target === 'cashback'
+  const modes: QuotaAdjustMode[] = isCashback
+    ? ['add', 'subtract']
+    : ['add', 'subtract', 'override']
 
   const { meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()
@@ -73,6 +78,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
   const handleConfirm = async () => {
     if (!amount && mode !== 'override') return
     if (quotaValue <= 0 && mode !== 'override') return
+    if (isCashback && (amountValue <= 0 || !Number.isFinite(amountValue) || (mode === 'subtract' && quotaValue > props.currentQuota))) return
 
     setLoading(true)
     try {
@@ -80,12 +86,16 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
         mode === 'override' ? parseQuotaFromDollars(amountValue) : quotaValue
       const result = await adjustUserQuota({
         id: props.userId,
-        action: 'add_quota',
+        action: isCashback ? 'adjust_cashback' : 'add_quota',
         mode,
         value: mode === 'override' ? value : Math.abs(value),
       })
       if (result.success) {
-        toast.success(t('Quota adjusted successfully'))
+        toast.success(
+          isCashback
+            ? t('Pending cashback adjusted successfully')
+            : t('Quota adjusted successfully')
+        )
         setAmount('')
         setMode('add')
         props.onOpenChange(false)
@@ -114,7 +124,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
     <Dialog
       open={props.open}
       onOpenChange={props.onOpenChange}
-      title={t('Adjust Quota')}
+      title={isCashback ? t('Adjust Pending Cashback') : t('Adjust Quota')}
       description={t('Select an operation mode and enter the amount')}
       contentHeight='auto'
       bodyClassName='space-y-4'
@@ -123,7 +133,10 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
           <Button variant='outline' onClick={handleCancel}>
             {t('Cancel')}
           </Button>
-          <Button onClick={handleConfirm} disabled={loading}>
+          <Button
+            onClick={handleConfirm}
+            disabled={loading || (isCashback && (!Number.isFinite(amountValue) || quotaValue <= 0 || (mode === 'subtract' && quotaValue > props.currentQuota)))}
+          >
             {loading ? t('Processing...') : t('Confirm')}
           </Button>
         </>
@@ -135,7 +148,7 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
         <div className='space-y-2'>
           <Label>{t('Mode')}</Label>
           <div className='flex gap-1'>
-            {(['add', 'subtract', 'override'] as const).map((m) => (
+            {modes.map((m) => (
               <Button
                 key={m}
                 type='button'
@@ -159,10 +172,11 @@ export function UserQuotaDialog(props: UserQuotaDialogProps) {
         </div>
 
         <div className='space-y-2'>
-          <Label>
+          <Label htmlFor={`quota-amount-${props.userId}-${props.target ?? 'wallet'}`}>
             {t('Amount')} ({currencyLabel})
           </Label>
           <Input
+            id={`quota-amount-${props.userId}-${props.target ?? 'wallet'}`}
             type='number'
             step={tokensOnly ? 1 : 0.000001}
             min={mode === 'override' ? undefined : 0}

@@ -172,6 +172,18 @@ export async function adjustUserQuota(
   return res.data
 }
 
+export async function setUserPromoter(
+  id: number,
+  enabled: boolean
+): Promise<ApiResponse> {
+  const res = await api.post('/api/user/manage', {
+    id,
+    action: 'set_promoter',
+    enabled,
+  })
+  return res.data
+}
+
 /**
  * Reset user's Passkey registration; requires an `admin.user.passkey.reset` proof
  */

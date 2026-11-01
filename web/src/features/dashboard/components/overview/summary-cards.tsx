@@ -208,6 +208,9 @@ export function SummaryCards() {
       ),
     [usageTrendQuery.data?.data]
   )
+  const requestBuckets = sparklineData.requests
+  const maxRequests = Math.max(...requestBuckets, 1)
+  const recentRequests = requestBuckets.reduce((total, count) => total + count, 0)
 
   const healthLevel = getHealthLevel(remainQuota, recentUsage)
   const healthCfg = HEALTH_CONFIG[healthLevel]
@@ -286,6 +289,36 @@ export function SummaryCards() {
               </StaggerItem>
             ))}
           </StaggerContainer>
+          <section className='border-t pt-3' aria-label={t('Request activity')}>
+            <div className='mb-2 flex items-center justify-between gap-3'>
+              <h4 className='text-muted-foreground text-xs font-medium'>
+                {t('Request activity')}
+              </h4>
+              <span className='text-muted-foreground text-xs tabular-nums'>
+                {formatNumber(recentRequests)}
+              </span>
+            </div>
+            <div
+              className='grid h-12 grid-cols-12 items-end gap-1 sm:h-16 sm:gap-1.5'
+              role='img'
+              aria-label={`${t('Request activity')}: ${requestBuckets.map((count) => formatNumber(count)).join(', ')}`}
+            >
+              {requestBuckets.map((count, index) => (
+                <span
+                  key={index}
+                  className='bg-overview-accent-2/75 hover:bg-overview-accent-2 min-h-0.5 rounded-sm transition-colors'
+                  style={{
+                    height: `${Math.max(4, (count / maxRequests) * 100)}%`,
+                  }}
+                  title={`${t('Requests')}: ${formatNumber(count)}`}
+                />
+              ))}
+            </div>
+            <div className='text-muted-foreground mt-1 flex justify-between text-[10px]'>
+              <span>24h</span>
+              <span>{t('Now')}</span>
+            </div>
+          </section>
         </div>
 
         <div className='flex flex-col justify-between gap-3 border-t bg-[linear-gradient(135deg,color-mix(in_oklch,var(--overview-accent-2)_12%,var(--background))_0%,color-mix(in_oklch,oklch(0.82_0.04_155)_8%,var(--background))_48%,color-mix(in_oklch,var(--overview-accent-1)_7%,var(--background))_100%)] p-3 sm:gap-4 sm:p-5 xl:border-t-0 xl:border-l'>

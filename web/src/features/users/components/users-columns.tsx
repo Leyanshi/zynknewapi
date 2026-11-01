@@ -46,6 +46,7 @@ import {
 import type { User } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { UserQuotaCell } from './user-quota-cell'
+import { UserCashbackCell } from './user-cashback-cell'
 
 export function useUsersColumns(): ColumnDef<User>[] {
   const { t } = useTranslation()
@@ -55,33 +56,18 @@ export function useUsersColumns(): ColumnDef<User>[] {
   const quotaUnit = currency.kind === 'tokens' ? t('Tokens') : currency.symbol
   return useMemo<ColumnDef<User>[]>(
     () => [
-      ...(isRoot
-        ? [
+      ...[
             {
               id: 'cashback_info',
               header: t('Recharge Cashback'),
               cell: ({ row }: { row: { original: User } }) => (
-                <div className='text-xs'>
-                  <div>
-                    {t('Pending')}:{' '}
-                    <span className='tabular-nums'>
-                      {formatQuota(row.original.aff_quota || 0)}
-                    </span>
-                  </div>
-                  <div className='text-muted-foreground'>
-                    {t('Total Earned')}:{' '}
-                    <span className='tabular-nums'>
-                      {formatQuota(row.original.aff_history_quota || 0)}
-                    </span>
-                  </div>
-                </div>
+                <UserCashbackCell user={row.original} isRoot={isRoot} />
               ),
               enableSorting: false,
               size: 160,
-              meta: { mobileHidden: true },
+              meta: { mobileOrder: 45 },
             } satisfies ColumnDef<User>,
-          ]
-        : []),
+          ],
       {
         id: 'select',
         header: ({ table }) => (

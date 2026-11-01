@@ -141,6 +141,16 @@ export function AffiliateRewardsCard({
             </Button>
           )}
         </div>
+        <div className='space-y-1 text-xs lg:col-span-3'>
+          <p>
+            {user?.is_promoter
+              ? t('Promoter rule: an invited user’s first recharge of CNY 10 or more earns a fixed CNY 2 reward, without percentage cashback. Smaller first recharges and all subsequent recharges earn 8%.')
+              : t('All invited users’ recharges earn 8%, including the first recharge.')}
+          </p>
+          <p className='text-muted-foreground'>
+            {t('Applies to online payments, redemption codes, and administrator recharges.')}
+          </p>
+        </div>
         {!complianceConfirmed ? (
           <p className='text-muted-foreground text-xs lg:col-span-3'>
             {t(

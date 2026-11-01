@@ -82,3 +82,52 @@ func manageUserQuota(c *gin.Context, req ManageRequest) {
 		auditContentEN(action, params), auditOperatorInfo(c), &operation, c)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 }
+
+func manageUserCashback(c *gin.Context, req ManageRequest) {
+	params := model.AuditFields{"target_user_id": req.Id}
+	action := "user.cashback_adjust"
+	if req.Action == "set_promoter" {
+		action = "user.promoter_set"
+	}
+	success := false
+	defer func() {
+		model.RecordOperationAuditLog(c.GetInt("id"), c.GetInt("role"), action, c.ClientIP(), action, params,
+			auditOperatorInfo(c), &model.AuditRequestInfo{
+				Method: c.Request.Method, Route: c.FullPath(), Status: c.Writer.Status(), Success: success,
+			}, c)
+		markAuditLogged(c)
+	}()
+	if req.Action == "set_promoter" {
+		if c.GetInt("role") != common.RoleRootUser {
+			common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+			return
+		}
+		if req.Enabled == nil {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
+		user, err := model.SetUserPromoter(req.Id, c.GetInt("role"), *req.Enabled)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		params["target_username"] = user.Username
+		params["from"] = user.IsPromoter
+		params["to"] = *req.Enabled
+	} else {
+		params["mode"], params["requested_quota"] = req.Mode, req.Value
+		adjustment, err := model.AdjustUserCashback(req.Id, c.GetInt("role"), req.Mode, req.Value)
+		if err != nil {
+			if errors.Is(err, model.ErrUserQuotaPermission) {
+				common.ApiErrorI18n(c, i18n.MsgUserNoPermissionHigherLevel)
+			} else {
+				common.ApiError(c, err)
+			}
+			return
+		}
+		params["target_username"] = adjustment.Username
+		params["from"], params["to"] = adjustment.Before, adjustment.After
+	}
+	success = true
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+}
