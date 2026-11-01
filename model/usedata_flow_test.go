@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,6 +169,58 @@ func TestGetDashboardTokenTrendAggregatesOwnedConsumeLogs(t *testing.T) {
 	require.EqualValues(t, 60, rows[0].OutputTokens)
 	require.EqualValues(t, 22, rows[0].CacheCreation)
 	require.EqualValues(t, 80, rows[0].CacheRead)
+}
+
+func TestDashboardQuotaQueriesPreserveGroupCostsAndCacheTotals(t *testing.T) {
+	truncateTables(t)
+	previousRatios := ratio_setting.GroupRatio2JSONString()
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(previousRatios))
+	})
+	require.NoError(t, ratio_setting.UpdateGroupRatioByJSONString(`{"default":1,"vip":2}`))
+	require.NoError(t, DB.Create(&User{Id: 1, Username: "dashboard-owner", Group: "default"}).Error)
+	require.NoError(t, DB.Create(&[]QuotaData{
+		{
+			UserID: 1, Username: "dashboard-owner", ModelName: "same-model",
+			UseGroup: "default", CreatedAt: 3600, Count: 1, Quota: 100,
+			TokenUsed: 50, CacheReadTokens: 20, CacheCreationTokens: 5,
+		},
+		{
+			UserID: 1, Username: "dashboard-owner", ModelName: "same-model",
+			UseGroup: "default", CreatedAt: 3600, Count: 2, Quota: 200,
+			TokenUsed: 100, CacheReadTokens: 40, CacheCreationTokens: 10,
+		},
+		{
+			UserID: 1, Username: "dashboard-owner", ModelName: "same-model",
+			UseGroup: "vip", CreatedAt: 3600, Count: 1, Quota: 400,
+			TokenUsed: 200, CacheReadTokens: 80, CacheCreationTokens: 20,
+		},
+	}).Error)
+
+	queries := map[string]func() ([]*QuotaData, error){
+		"self":     func() ([]*QuotaData, error) { return GetQuotaDataByUserId(1, 3600, 7200) },
+		"username": func() ([]*QuotaData, error) { return GetQuotaDataByUsername("dashboard-owner", 3600, 7200) },
+		"all":      func() ([]*QuotaData, error) { return GetAllQuotaDates(3600, 7200, "") },
+	}
+	for name, query := range queries {
+		t.Run(name, func(t *testing.T) {
+			rows, err := query()
+			require.NoError(t, err)
+			require.Len(t, rows, 2)
+			var actualCost, baseCost float64
+			var cacheRead, cacheCreation int64
+			for _, row := range rows {
+				actualCost += float64(row.Quota)
+				baseCost += float64(row.Quota) / row.GroupRatio
+				cacheRead += row.CacheReadTokens
+				cacheCreation += row.CacheCreationTokens
+			}
+			assert.Equal(t, float64(700), actualCost)
+			assert.Equal(t, float64(500), baseCost)
+			assert.EqualValues(t, 140, cacheRead)
+			assert.EqualValues(t, 35, cacheCreation)
+		})
+	}
 }
 
 func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {

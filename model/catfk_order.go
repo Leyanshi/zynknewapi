@@ -2,7 +2,6 @@ package model
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -122,7 +121,10 @@ func CompleteCatfkOrder(id string, cards []string, instructions string) error {
 	})
 	if err == nil && credited != nil {
 		syncCreditUserQuotaCache(order.UserID, credited.Quota, "catfk redemption")
-		RecordLog(order.UserID, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(credited.Quota), credited.Id))
+		RecordLog(order.UserID, LogTypeTopup, common.NewMessage("Topped up {{quota}} with a redemption code, code ID {{id}}", map[string]any{
+			"quota": logger.FormatQuota(credited.Quota),
+			"id":    credited.Id,
+		}))
 	}
 	return err
 }
