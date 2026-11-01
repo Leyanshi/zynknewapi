@@ -23,22 +23,17 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge } from '@/components/ui/icon-badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   getFlowQuotaDates,
   getUserDashboardTokenTrend,
   getUserQuotaDates,
 } from '@/features/dashboard/api'
+import { getDefaultDays } from '@/features/dashboard/lib'
 import { getDashboardChartColors } from '@/features/dashboard/lib/charts'
 import type {
   DashboardTokenTrendItem,
+  DashboardFilters,
   FlowQuotaDataItem,
   QuotaDataItem,
 } from '@/features/dashboard/types'
@@ -50,13 +45,6 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 type UsageMetric = 'tokens' | 'quota'
 type TimeGranularity = 'hour' | 'day' | 'week'
 type DistributionValue = { name: string; value: number }
-
-const RANGE_OPTIONS = [1, 7, 14, 29] as const
-const GRANULARITIES: Array<{ value: TimeGranularity; labelKey: string }> = [
-  { value: 'hour', labelKey: 'Hourly' },
-  { value: 'day', labelKey: 'Daily buckets' },
-  { value: 'week', labelKey: 'Weekly buckets' },
-]
 
 function aggregateDistribution(
   rows: Array<QuotaDataItem | FlowQuotaDataItem>,
@@ -133,6 +121,7 @@ function tokenTrendSpec(
     output: string
     cacheCreation: string
     cacheHit: string
+    cacheHitRate: string
     tokens: string
     empty: string
   }
@@ -151,10 +140,19 @@ function tokenTrendSpec(
       value: Number(value) || 0,
     }))
   })
-  const colors = getDashboardChartColors(4)
+  const hitRateValues = rows.map((row) => {
+    const input = Number(row.input_tokens) || 0
+    const cacheHit = Number(row.cache_read_tokens) || 0
+    return {
+      time: formatChartTime(row.bucket, granularity),
+      series: labels.cacheHitRate,
+      value: input > 0 ? (cacheHit / input) * 100 : 0,
+    }
+  })
+  const colors = getDashboardChartColors(5)
   return {
     type: 'line',
-    data: [{ id: 'token-usage', values }],
+    data: [{ id: 'token-usage', values: [...values, ...hitRateValues] }],
     xField: 'time',
     yField: 'value',
     seriesField: 'series',
@@ -173,6 +171,14 @@ function tokenTrendSpec(
         ],
         title: { visible: true, text: labels.tokens },
       },
+      {
+        orient: 'right',
+        type: 'linear',
+        seriesId: [labels.cacheHitRate],
+        min: 0,
+        max: 100,
+        title: { visible: true, text: `${labels.cacheHitRate} (%)` },
+      },
       { orient: 'bottom', type: 'band', label: { visible: true } },
     ],
     color: {
@@ -182,6 +188,7 @@ function tokenTrendSpec(
         labels.output,
         labels.cacheCreation,
         labels.cacheHit,
+        labels.cacheHitRate,
       ],
       range: colors,
     },
@@ -236,13 +243,20 @@ function DistributionPanel(props: {
   )
 }
 
-export function UsageAnalytics() {
+export function UsageAnalytics(props: { filters?: DashboardFilters }) {
   const { t } = useTranslation()
   const { resolvedTheme, themeReady } = useChartTheme()
-  const [rangeDays, setRangeDays] = useState<(typeof RANGE_OPTIONS)[number]>(7)
-  const [granularity, setGranularity] = useState<TimeGranularity>('day')
+  const granularity = props.filters?.time_granularity ?? 'hour'
   const [metric, setMetric] = useState<UsageMetric>('tokens')
-  const timeRange = useMemo(() => computeTimeRange(rangeDays), [rangeDays])
+  const timeRange = useMemo(
+    () =>
+      computeTimeRange(
+        getDefaultDays(granularity),
+        props.filters?.start_timestamp,
+        props.filters?.end_timestamp
+      ),
+    [props.filters?.end_timestamp, props.filters?.start_timestamp, granularity]
+  )
   const queryParams = useMemo(
     () => ({
       ...timeRange,
@@ -310,6 +324,7 @@ export function UsageAnalytics() {
           output: t('Output'),
           cacheCreation: t('Cache Creation'),
           cacheHit: t('Cache Hit'),
+          cacheHitRate: t('Cache Hit Rate'),
           tokens: t('Tokens'),
           empty: t('No data available'),
         }
@@ -327,45 +342,6 @@ export function UsageAnalytics() {
           <h2 className='text-base font-semibold'>{t('Usage analytics')}</h2>
         </div>
         <div className='flex flex-wrap items-center gap-2'>
-          <Select
-            value={String(rangeDays)}
-            onValueChange={(value) => {
-              if (value) setRangeDays(Number(value) as (typeof RANGE_OPTIONS)[number])
-            }}
-          >
-            <SelectTrigger size='sm' aria-label={t('Time range')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((days) => (
-                <SelectItem key={days} value={String(days)}>
-                  {t('{{count}} days', { count: days })}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={granularity}
-            onValueChange={(value) => {
-              if (
-                value &&
-                GRANULARITIES.some((item) => item.value === value)
-              ) {
-                setGranularity(value as TimeGranularity)
-              }
-            }}
-          >
-            <SelectTrigger size='sm' aria-label={t('Time granularity')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {GRANULARITIES.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {t(item.labelKey)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Tabs
             value={metric}
             onValueChange={(value) => setMetric(value as UsageMetric)}
