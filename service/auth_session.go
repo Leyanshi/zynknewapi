@@ -143,9 +143,15 @@ func ValidateLoginSession(identity AuthIdentity) (*model.UserSession, *model.Use
 	if err != nil {
 		return nil, nil, err
 	}
-	if user.Status != common.UserStatusEnabled || user.AuthVersion != identity.UserAuthVersion {
+	role, status, authVersion, err := model.GetUserAuthorizationState(identity.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if status != common.UserStatusEnabled || authVersion != identity.UserAuthVersion {
 		return nil, nil, ErrLoginSessionRevoked
 	}
+	user.Role = role
+	user.Status = status
 	return session, user, nil
 }
 

@@ -520,6 +520,20 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	return &user, err
 }
 
+// GetUserAuthorizationState returns the database-authoritative fields used to
+// authorize dashboard requests. Redis user hashes are a performance cache and
+// must never be the source of a privilege decision.
+func GetUserAuthorizationState(id int) (role, status int, authVersion int64, err error) {
+	if id <= 0 {
+		return 0, 0, 0, common.NewMessage("ID is empty!")
+	}
+	user, err := GetUserById(id, false)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return user.Role, user.Status, user.AuthVersion, nil
+}
+
 // GetSelfUserById reads dashboard profile data and password existence in one
 // query. The password hash and management access token are never selected.
 func GetSelfUserById(id int) (*User, error) {

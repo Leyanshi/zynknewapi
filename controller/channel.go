@@ -1573,6 +1573,10 @@ func CopyChannel(c *gin.Context) {
 	// clone channel
 	clone := *origin // shallow copy is sufficient as we will overwrite primitives
 	clone.Id = 0     // let DB auto-generate
+	// A clone must not silently create a second live copy of an upstream
+	// credential. Re-enter the key through the sensitive channel editor if the
+	// operator explicitly intends to configure the clone.
+	clone.Key = ""
 	clone.CreatedTime = common.GetTimestamp()
 	clone.Name = origin.Name + suffix
 	clone.TestTime = 0

@@ -191,6 +191,36 @@ func TestCopyChannelRejectsInvalidLegacyProxySettings(t *testing.T) {
 	assert.Equal(t, int64(1), channelCount)
 }
 
+func TestCopyChannelDoesNotDuplicateUpstreamCredential(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	origin := &model.Channel{
+		Type: constant.ChannelTypeOpenAI, Name: "credentialed source", Key: "do-not-copy-this-secret",
+		Models: "gpt-test", Group: "default",
+	}
+	require.NoError(t, db.Create(origin).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Params = gin.Params{{Key: "id", Value: fmt.Sprintf("%d", origin.Id)}}
+	ctx.Request = httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/channel/copy/%d", origin.Id), nil)
+	ctx.Set("id", 1)
+	ctx.Set("role", common.RoleRootUser)
+
+	CopyChannel(ctx)
+
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			ID int `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	var clone model.Channel
+	require.NoError(t, db.First(&clone, response.Data.ID).Error)
+	assert.Empty(t, clone.Key)
+}
+
 func TestDeleteChannelResetsProxyCacheWhenPreReadFails(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.Log{}, &model.AuditLog{}))

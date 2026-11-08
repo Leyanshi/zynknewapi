@@ -58,6 +58,17 @@ func authHelper(c *gin.Context, minRole int) {
 		writeDashboardAuthError(c, err)
 		return
 	}
+	role, status, authVersion, err := model.GetUserAuthorizationState(user.Id)
+	if err != nil {
+		writeDashboardAuthError(c, err)
+		return
+	}
+	if authVersion != user.AuthVersion {
+		abortWithWebMessage(c, http.StatusUnauthorized, "AUTH_UNAUTHORIZED", common.NewMessage("Unauthorized, invalid access token"))
+		return
+	}
+	user.Role = role
+	user.Status = status
 	if user.Status != common.UserStatusEnabled {
 		abortWithWebMessage(c, http.StatusUnauthorized, "AUTH_USER_DISABLED", common.NewMessage("User has been banned"))
 		return
@@ -117,6 +128,19 @@ func TryUserAuth() func(c *gin.Context) {
 			lookup = requestAccessTokenLookup(c)
 			if user.Status != common.UserStatusEnabled || !enforceAccessTokenRoute(c, lookup, false) {
 				credentialKind = dashboardCredentialUnmatched
+			}
+		}
+		if credentialKind != dashboardCredentialUnmatched {
+			role, status, authVersion, stateErr := model.GetUserAuthorizationState(user.Id)
+			if stateErr != nil {
+				writeDashboardAuthError(c, stateErr)
+				return
+			}
+			if status != common.UserStatusEnabled || authVersion != user.AuthVersion {
+				credentialKind = dashboardCredentialUnmatched
+			} else {
+				user.Role = role
+				user.Status = status
 			}
 		}
 		if credentialKind != dashboardCredentialUnmatched {

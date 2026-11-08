@@ -368,6 +368,31 @@ func TestLoginSessionCreateRefreshAndRevoke(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrLoginSessionRevoked))
 }
 
+func TestValidateLoginSessionUsesDatabaseRoleInsteadOfPoisonedUserCache(t *testing.T) {
+	useTestSessionSecret(t)
+	user := setupAuthSessionTestDB(t)
+	server := miniredis.RunT(t)
+	previousRedisEnabled, previousRedisClient := common.RedisEnabled, common.RDB
+	common.RedisEnabled = true
+	common.SyncFrequency = 60
+	common.RDB = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() {
+		_ = common.RDB.Close()
+		common.RedisEnabled = previousRedisEnabled
+		common.RDB = previousRedisClient
+	})
+
+	bundle, err := CreateLoginSession(user.Id, "password", "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+	identity, err := ParseAccessToken(bundle.AccessToken)
+	require.NoError(t, err)
+	require.NoError(t, common.RDB.HSet(t.Context(), "user:"+fmt.Sprint(user.Id), "Role", common.RoleRootUser).Err())
+
+	_, cachedUser, err := ValidateLoginSession(identity)
+	require.NoError(t, err)
+	assert.Equal(t, common.RoleCommonUser, cachedUser.Role)
+}
+
 func TestIndependentRedisSessionRevokeConvergesAfterCacheTTL(t *testing.T) {
 	useTestSessionSecret(t)
 	user := setupAuthSessionTestDB(t)

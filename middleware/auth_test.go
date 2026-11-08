@@ -16,8 +16,10 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/service/authz"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
+	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,6 +49,39 @@ func setupDashboardAuthMiddlewareTest(t *testing.T) {
 		common.RedisEnabled = previousRedis
 		common.SessionSecret = previousSecret
 	})
+}
+
+func TestAdminAuthRejectsRootRoleInjectedIntoUserCache(t *testing.T) {
+	setupDashboardAuthMiddlewareTest(t)
+	server := miniredis.RunT(t)
+	previousRedisEnabled, previousRedisClient := common.RedisEnabled, common.RDB
+	common.RedisEnabled = true
+	common.RDB = redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() {
+		_ = common.RDB.Close()
+		common.RedisEnabled = previousRedisEnabled
+		common.RDB = previousRedisClient
+	})
+
+	user := createMiddlewarePATUser(t, "cache-role-user", "cache-role-pat")
+	bundle, err := service.CreateLoginSession(user.Id, "password", "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+	identity, err := service.ParseAccessToken(bundle.AccessToken)
+	require.NoError(t, err)
+	require.NoError(t, common.RDB.HSet(t.Context(), fmt.Sprintf("user:%d", user.Id), "Role", common.RoleRootUser).Err())
+
+	router := gin.New()
+	router.GET("/admin", AdminAuth(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	request := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	request.Header.Set("Authorization", "Bearer "+bundle.AccessToken)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	_, _, err = service.ValidateLoginSession(identity)
+	require.NoError(t, err, "cache role tampering must not revoke a valid common-user session")
 }
 
 func issueExpiredDashboardAccessToken(t *testing.T, identity service.AuthIdentity) string {
@@ -447,9 +482,9 @@ func TestAccessTokenIdentityAndSingleLookup(t *testing.T) {
 			if test.stepUp {
 				assert.Equal(t, service.AuthIdentity{UserID: user.Id, SessionID: model.AccessTokenSessionID(token.Id), UserAuthVersion: user.AuthVersion, SessionVersion: model.AccessTokenSessionVersion}, body.Identity)
 			}
-			// The access audit and authentication share one lookup: the
-			// credential query plus the owner's user row.
-			assert.Len(t, queries, 2)
+			// The access audit, credential lookup and authoritative role read all
+			// run once. The latter is required before using any privilege context.
+			assert.Len(t, queries, 3)
 			assert.Equal(t, test.tokenTable, countQueries("user_access_tokens", "token_hash"))
 			assert.Equal(t, test.legacyQuery, countQueries("users", "access_token = "))
 		})

@@ -2,7 +2,9 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -141,6 +143,93 @@ type FetchCustomOAuthDiscoveryRequest struct {
 	IssuerURL    string `json:"issuer_url"`
 }
 
+const maxCustomOAuthDiscoveryBytes = 1 << 20
+
+var customOAuthDiscoveryDialer = &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
+
+func newCustomOAuthDiscoveryClient() *http.Client {
+	transport := &http.Transport{
+		Proxy:                 nil,
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			ips, err := resolvePublicDiscoveryHost(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			var lastErr error
+			for _, ip := range ips {
+				conn, err := customOAuthDiscoveryDialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+			}
+			return nil, lastErr
+		},
+	}
+	return &http.Client{
+		Timeout:   20 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func resolvePublicDiscoveryHost(ctx context.Context, host string) ([]net.IP, error) {
+	var ips []net.IP
+	if ip := net.ParseIP(host); ip != nil {
+		ips = []net.IP{ip}
+	} else {
+		addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("discovery URL host could not be resolved")
+		}
+		ips = make([]net.IP, 0, len(addresses))
+		for _, address := range addresses {
+			ips = append(ips, address.IP)
+		}
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("discovery URL host could not be resolved")
+	}
+	for _, ip := range ips {
+		protection := &common.SSRFProtection{DomainFilterMode: false, IpFilterMode: false}
+		if ip == nil || protection.ValidateNetworkTarget(ip.String(), 443) != nil {
+			return nil, fmt.Errorf("discovery URL must resolve only to public addresses")
+		}
+	}
+	return ips, nil
+}
+
+func validateCustomOAuthDiscoveryTarget(ctx context.Context, targetURL string) error {
+	parsed, err := url.Parse(targetURL)
+	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("invalid discovery URL")
+	}
+	host := parsed.Hostname()
+	port := parsed.Port()
+	if port == "" {
+		if parsed.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+	portNumber, err := strconv.Atoi(port)
+	if err != nil || portNumber < 1 || portNumber > 65535 {
+		return fmt.Errorf("invalid discovery URL port")
+	}
+	_, err = resolvePublicDiscoveryHost(ctx, host)
+	return err
+}
+
 // FetchCustomOAuthDiscovery fetches OIDC discovery document via backend (root-only route)
 func FetchCustomOAuthDiscovery(c *gin.Context) {
 	var req FetchCustomOAuthDiscoveryRequest
@@ -171,6 +260,10 @@ func FetchCustomOAuthDiscovery(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
+	if err := validateCustomOAuthDiscoveryTarget(ctx, targetURL); err != nil {
+		common.ApiErrorT(c, "Invalid Discovery URL. Only public HTTP or HTTPS targets are allowed")
+		return
+	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
@@ -179,7 +272,7 @@ func FetchCustomOAuthDiscovery(c *gin.Context) {
 	}
 	httpReq.Header.Set("Accept", "application/json")
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := newCustomOAuthDiscoveryClient()
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		common.ApiErrorT(c, "Failed to fetch the Discovery configuration: {{error}}", map[string]any{"error": err.Error()})
@@ -197,8 +290,13 @@ func FetchCustomOAuthDiscovery(c *gin.Context) {
 		return
 	}
 
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxCustomOAuthDiscoveryBytes+1))
+	if err != nil || len(body) > maxCustomOAuthDiscoveryBytes {
+		common.ApiErrorT(c, "Discovery configuration is too large")
+		return
+	}
 	var discovery map[string]any
-	if err = common.DecodeJson(resp.Body, &discovery); err != nil {
+	if err = common.Unmarshal(body, &discovery); err != nil {
 		common.ApiErrorT(c, "Failed to parse the Discovery configuration: {{error}}", map[string]any{"error": err.Error()})
 		return
 	}
